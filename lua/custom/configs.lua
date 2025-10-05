@@ -125,3 +125,6 @@ vim.opt.inccommand = 'split'
 
 -- Show which line your cursor is on
 vim.opt.cursorline = true
+
+-- [[ Markdown]]
+vim.opt.conceallevel = 2
