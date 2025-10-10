@@ -7,6 +7,7 @@ return { -- Autocompletion
     -- Snippet Engine
     {
       'L3MON4D3/LuaSnip',
+
       version = '2.*',
       build = (function()
         -- Build Step is needed for regex support in snippets.
@@ -30,7 +31,18 @@ return { -- Autocompletion
       },
       opts = {},
     },
-    'folke/lazydev.nvim',
+    {
+      -- `lazydev` configures Lua LSP for your Neovim config, runtime and plugins
+      -- used for completion, annotations and signatures of Neovim apis
+      'folke/lazydev.nvim',
+      ft = 'lua',
+      opts = {
+        library = {
+          -- Load luvit types when the `vim.uv` word is found
+          { path = '${3rd}/luv/library', words = { 'vim%.uv' } },
+        },
+      },
+    },
     -- NOTE: To use copilot with blink
     -- {
     --   "github/copilot.vim",

@@ -216,8 +216,29 @@ return {
     --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
     local servers = {
       -- clangd = {},
-      gopls = {},
-      pyright = {},
+      -- gopls = {},
+      pyright = {
+        root_dir = require('lspconfig.util').root_pattern(
+          'pyproject.toml',
+          'setup.py',
+          'setup.cfg',
+          'requirements.txt',
+          'Pipfile',
+          'pyrightconfig.json',
+          '.git'
+        ),
+        settings = {
+          python = {
+            venvPath = vim.fn.fnamemodify(vim.fn.trim(vim.fn.system 'poetry env info -p'), ':h'),
+            venv = vim.fn.fnamemodify(vim.fn.trim(vim.fn.system 'poetry env info -p'), ':t'),
+            analysis = {
+              autoSearchPaths = true,
+              useLibraryCodeForTypes = true,
+              diagnosticMode = 'openFilesOnly',
+            },
+          },
+        },
+      },
       -- rust_analyzer = {},
       -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
       --
@@ -265,15 +286,15 @@ return {
       'gopls',
       'lua_ls',
       'vimls',
-      'pylsp',
       'dockerls',
+      'pyright',
       -- 'jdtls',     -- Handeling installation seperatly
     })
     require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
     require('mason-lspconfig').setup {
       ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
-      automatic_installation = false,
+      automatic_installation = true,
       handlers = {
         function(server_name)
           local server = servers[server_name] or {}

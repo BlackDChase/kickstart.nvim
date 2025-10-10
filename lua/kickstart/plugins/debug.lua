@@ -23,6 +23,7 @@ return {
 
     -- Add your own debuggers here
     'leoluz/nvim-dap-go',
+    'mfussenegger/nvim-dap-python',
   },
   keys = {
     -- Basic debugging keymaps, feel free to change to your liking!
@@ -144,5 +145,9 @@ return {
         detached = vim.fn.has 'win32' == 0,
       },
     }
+    require('dap-python').setup(
+      vim.fn.trim(vim.fn.system 'poetry env info -p') ~= '' and vim.fn.trim(vim.fn.system 'poetry env info -p') .. '/bin/python' or vim.fn.exepath 'python'
+    )
+    require('dap-python').test_runner = 'pytest'
   end,
 }

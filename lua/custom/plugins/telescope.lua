@@ -47,11 +47,21 @@ return { -- Fuzzy Finder (files, lsp, etc)
       -- You can put your default mappings / updates / etc. in here
       --  All the info you're looking for is in `:help telescope.setup()`
       --
-      -- defaults = {
-      --   mappings = {
-      --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
-      --   },
-      -- },
+      defaults = {
+        file_ignore_patterns = {
+          '%.git/',
+          'node_modules/',
+          '%.venv/',
+          'venv/',
+          '__pycache__/',
+          '%.mypy_cache/',
+          '%.pytest_cache/',
+          'build/',
+          'dist/',
+        }, -- mappings = {
+        --   i = { ['<c-enter>'] = 'to_fuzzy_refine' },
+        -- },
+      },
       -- pickers = {}
       extensions = {
         ['ui-select'] = {

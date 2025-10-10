@@ -29,6 +29,12 @@ rtp:prepend(lazypath)
 -- NOTE: Here is where you install your plugins.
 require('lazy').setup({
 
+  change_detection = {
+
+    enabled = true, -- update config as modifcations
+    notify = false, -- no popup
+  },
+
   -- 'NMAC427/guess-indent.nvim', -- Detect tabstop and shiftwidth automatically
 
   require 'kickstart.plugins.debug',
