@@ -121,10 +121,11 @@ vim.keymap.set({ 'n', 't' }, 'zK', function()
   vim.cmd.winc { 'K' }
 end, { desc = 'Move window to the upper' })
 -- Resizing
-vim.keymap.set({ 'n', 't' }, 'zh', ':horizontal resize +5<CR>')
-vim.keymap.set({ 'n', 't' }, 'zl', ':vertical resize -5<CR>')
-vim.keymap.set({ 'n', 't' }, 'zj', ':vertical resize +5<CR>')
-vim.keymap.set({ 'n', 't' }, 'zk', ':horizontal resize -5<CR>')
+-- In ITerm profile Ask otpion to send Esc+key sequences
+vim.keymap.set({ 'n', 't' }, '<A-h>', ':vertical resize -1<CR>')
+vim.keymap.set({ 'n', 't' }, '<A-j>', ':horizontal resize -1<CR>')
+vim.keymap.set({ 'n', 't' }, '<A-k>', ':horizontal resize +1<CR>')
+vim.keymap.set({ 'n', 't' }, '<A-l>', ':vertical resize +1<CR>')
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
