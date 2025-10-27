@@ -73,7 +73,7 @@ return {
 
         -- Rename the variable under your cursor.
         --  Most Language Servers support renaming across files, etc.
-        map(';rn', vim.lsp.buf.rename, '[R]e[n]ame')
+        map(';re', vim.lsp.buf.rename, '[R][e]name')
 
         -- Execute a code action, usually your cursor needs to be on top of an error
         -- or a suggestion from your LSP for this to activate.
@@ -288,7 +288,9 @@ return {
       'vimls',
       'dockerls',
       'pyright',
-      -- 'jdtls',     -- Handeling installation seperatly
+      'jdtls',
+      'java-debug-adapter',
+      'java-test',
     })
     require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -297,6 +299,10 @@ return {
       automatic_installation = true,
       handlers = {
         function(server_name)
+          if server_name == 'jdtls' then
+            -- jdtls needs bespoke configuration (see ftplugin/java.lua)
+            return
+          end
           local server = servers[server_name] or {}
           -- This handles overriding only values explicitly passed
           -- by the server configuration above. Useful when disabling
