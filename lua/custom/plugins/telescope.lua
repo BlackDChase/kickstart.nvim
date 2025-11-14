@@ -87,6 +87,7 @@ return { -- Fuzzy Finder (files, lsp, etc)
     vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
     vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
     vim.keymap.set('n', '<c-o>', builtin.git_files, { desc = 'Search [O]pened Git Files' })
+    vim.keymap.set('n', '<leader>sj', builtin.jumplist, { desc = '[S]earch [J]ump list' })
 
     -- Slightly advanced example of overriding default behavior and theme
     vim.keymap.set('n', '<leader>/', function()

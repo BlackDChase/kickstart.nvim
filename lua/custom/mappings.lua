@@ -57,9 +57,9 @@ vim.keymap.set('n', 'N', 'Nzzzv')
 --------------------------------------------------------------------------------
 
 -- Buffer
-vim.keymap.set('n', '<tab>', vim.cmd.bn)
-vim.keymap.set('n', '<s-tab>', vim.cmd.bp)
-vim.keymap.set('n', '<leader><tab>', vim.cmd.bd)
+vim.keymap.set('n', '<A-[>', vim.cmd.bn)		-- Alt/Opt + [
+vim.keymap.set('n', '<A-]>', vim.cmd.bp)		-- Alt/Opt + ]
+vim.keymap.set('n', '<A-BS>', vim.cmd.bd)		-- Alt/Opt + Backspace
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -90,7 +90,7 @@ vim.keymap.set({ 'n', 'v' }, '<leader>Y', '"+Y')
 --------------------------------------------------------------------------------
 
 -- [[ TABS ]]
-vim.keymap.set('n', '<C-t>', vim.cmd.tabnew)
+-- vim.keymap.set('n', '<C-t>', vim.cmd.tabnew)
 vim.keymap.set('n', '<leader>tt', vim.cmd.tabs)
 -- vim.keymap.set('n', '<C-K>', vim.cmd.tabnext) -- gt
 -- vim.keymap.set('n', '<C-J>', vim.cmd.tabprev) -- gT

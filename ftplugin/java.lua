@@ -210,6 +210,10 @@ local config = {
   },
   capabilities = require('blink.cmp').get_lsp_capabilities(),
   on_attach = function(client, bufnr)
+    -- Advertise implementation support so generic LSP helpers (Telescope, etc.)
+    -- don't short-circuit when jdtls forgets to report it.
+    client.server_capabilities.implementationProvider = client.server_capabilities.implementationProvider or true
+
     jdtls.setup_dap { hotcodereplace = 'auto' }
     require('jdtls.dap').setup_dap_main_class_configs()
     jdtls.setup.add_commands()
@@ -240,15 +244,15 @@ local config = {
   end,
 }
 
-local formatter = vim.fn.stdpath 'config' .. '/ftplugin/JavaCodeStyle.xml'
-if vim.fn.filereadable(formatter) == 1 then
-  config.settings.java.format = {
-    enabled = true,
-    settings = {
-      url = ('file://%s'):format(formatter),
-      profile = 'JavaCodeStyle',
-    },
-  }
-end
+-- local formatter = vim.fn.stdpath 'config' .. '/ftplugin/JavaCodeStyle.xml'
+-- if vim.fn.filereadable(formatter) == 1 then
+--   config.settings.java.format = {
+--     enabled = true,
+--     settings = {
+--       url = ('file://%s'):format(formatter),
+--       profile = 'JavaCodeStyle',
+--     },
+--   }
+-- end
 
 jdtls.start_or_attach(config)

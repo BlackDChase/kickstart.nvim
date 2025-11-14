@@ -42,11 +42,16 @@ return { -- Useful plugin to show you pending keybinds.
       },
     },
 
+      keys = {
+        scroll_down = "<c-d>", -- binding to scroll down inside the popup
+        scroll_up = "<c-u>", -- binding to scroll up inside the popup
+      },
     -- Document existing key chains
     spec = {
       { '<leader>s', group = '[S]earch' },
       { '<leader>t', group = '[T]oggle' },
       { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
+      { '<leader>;', group = 'LSP' },
     },
   },
 }

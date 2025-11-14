@@ -128,3 +128,6 @@ vim.opt.cursorline = true
 
 -- [[ Markdown]]
 vim.opt.conceallevel = 2
+
+-- [[GIT]]
+vim.opt.endofline = true
