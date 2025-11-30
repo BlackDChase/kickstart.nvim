@@ -29,12 +29,13 @@ vim.opt.showmode = false
 -- vim.opt.autoread = true
 -- vim.opt.syntax = "on"
 -- vim.opt.cmdheight = 2
---
+
 -- As you scroll down load extra 8 lines
 -- Minimal number of screen lines to keep above and below the cursor.
 vim.opt.scrolloff = 10
 vim.opt.isfname:append '@-@'
 vim.opt.updatetime = 50
+
 -- Good colors
 -- vim.opt.termguicolors = true
 

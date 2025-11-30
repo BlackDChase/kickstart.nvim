@@ -7,7 +7,7 @@
 vim.keymap.set({ 'n', 'v' }, 'S', vim.cmd.update)
 vim.keymap.set({ 'n', 'v' }, '|', vim.cmd.q)
 -- Vertical changes exit save
-vim.keymap.set('i', '<C-c', '<ESC>')
+-- vim.keymap.set('i', '<C-c>', '<ESC>')
 
 -- No Operation when exidental Q
 vim.keymap.set('n', 'Q', '<nop>')
@@ -19,10 +19,10 @@ vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Show diagn
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
 
 -- TIP: Disable arrow keys in normal mode
--- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
--- vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
--- vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
--- vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
+vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
+vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
+vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
+vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
 
 -- Keybinds to make split navigation easier.
 --  Use CTRL+<hjkl> to switch between windows
@@ -34,7 +34,7 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
 -- vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
-vim.keymap.set('n', '<ESC>', vim.cmd.noh)
+vim.keymap.set({'n'}, '<ESC>', vim.cmd.noh)
 
 -- UP DOWN without moving cursor
 vim.keymap.set('n', '<C-u>', '<C-u>zz')
@@ -74,26 +74,32 @@ vim.keymap.set('v', 'J', '>+1<CR>gv=gv')
 vim.keymap.set('v', 'K', '<-2<CR>gv=gv')
 
 -- Paste without messing up the buffer
-vim.keymap.set('x', '<leader>p', '"_dP')
-vim.keymap.set({ 'n', 'v' }, '<leader>p', '"_d')
+vim.keymap.set('x', '<leader>p', '"_dP', {desc='[P]aste without messing buffer'})
+vim.keymap.set({ 'n', 'v' }, '<leader>p', '"_d', {desc='[P]aste without messing buffer'})
 -- Yank para
-vim.keymap.set({ 'n', 'v' }, '<leader>y', '"+y')
-vim.keymap.set({ 'n', 'v' }, '<leader>Y', '"+Y')
+vim.keymap.set({ 'n', 'v' }, '<leader>y', '"+y', {desc='[Y]ank para'})
+vim.keymap.set({ 'n', 'v' }, '<leader>Y', '"+Y', {desc='[Y]and para'})
 
 -- Quick fix navigation
--- vim.keymap.set('n', '<C-l>', vim.cmd.lprev)
--- vim.keymap.set('n', '<C-h>', vim.cmd.lnext)
--- vim.keymap.set('n', '(', vim.cmd.cprev)
--- vim.keymap.set('n', ')', vim.cmd.cnext)
+vim.keymap.set('n', '<leader><s-tab>', vim.cmd.lprev, {desc='Previous Quick fix'})
+vim.keymap.set('n', '<leader><tab>', vim.cmd.lnext, {desc='Next Quick fix'})
+vim.keymap.set('n', '<localleader><s-tab>', vim.cmd.cprev, {desc='Previous quick fix'})
+vim.keymap.set('n', '<localleader><tab>', vim.cmd.cnext, {desc='Next quick fix'})
+
+-- File explorer
+-- vim.keymap.set("n", "<leader>vs", function () vim.cmd("30 vs ./") end)
+-- vim.keymap.set("n", "<leader>vt", function () vim.cmd("30 Tex ./") end)
+-- vim.keymap.set("n", "<leader>vtl", function () vim.cmd("30 Tex") end)
+-- vim.keymap.set("n", "<leader>vl", function () vim.cmd("30 Vex") end)
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
 -- [[ TABS ]]
--- vim.keymap.set('n', '<C-t>', vim.cmd.tabnew)
-vim.keymap.set('n', '<leader>tt', vim.cmd.tabs)
--- vim.keymap.set('n', '<C-K>', vim.cmd.tabnext) -- gt
--- vim.keymap.set('n', '<C-J>', vim.cmd.tabprev) -- gT
+vim.keymap.set('n', '<leader>tn', vim.cmd.tabnew, {desc='[T]ab [n]ew'})
+vim.keymap.set('n', '<leader>tt', vim.cmd.tabs, {desc='[T]ab [n]ew'})
+vim.keymap.set('n', '<tab>', vim.cmd.tabnext, {desc='Next [tab]'}) -- gt
+vim.keymap.set('n', '<s-tab>', vim.cmd.tabprev, {desc='Previous [TAB]'}) -- gT
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -108,18 +114,10 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the [l] right
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the [j] lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the [k] upper window' })
 -- Moving Split
-vim.keymap.set({ 'n', 't' }, 'zH', function()
-  vim.cmd.winc { 'H' }
-end, { desc = 'Move window to the left' })
-vim.keymap.set({ 'n', 't' }, 'zL', function()
-  vim.cmd.winc { 'L' }
-end, { desc = 'Move window to the right' })
-vim.keymap.set({ 'n', 't' }, 'zJ', function()
-  vim.cmd.winc { 'J' }
-end, { desc = 'Move window to the lower' })
-vim.keymap.set({ 'n', 't' }, 'zK', function()
-  vim.cmd.winc { 'K' }
-end, { desc = 'Move window to the upper' })
+vim.keymap.set({ 'n', 't' }, 'zH', function() vim.cmd.winc { 'H' } end, { desc = 'Move window to the left' })
+vim.keymap.set({ 'n', 't' }, 'zL', function() vim.cmd.winc { 'L' } end, { desc = 'Move window to the right' })
+vim.keymap.set({ 'n', 't' }, 'zJ', function() vim.cmd.winc { 'J' } end, { desc = 'Move window to the lower' })
+vim.keymap.set({ 'n', 't' }, 'zK', function() vim.cmd.winc { 'K' } end, { desc = 'Move window to the upper' })
 -- Resizing
 -- In ITerm profile Ask otpion to send Esc+key sequences
 vim.keymap.set({ 'n', 't' }, '<A-h>', ':vertical resize -1<CR>')
@@ -161,18 +159,18 @@ end, { desc = '[C]hannel [S]end command' })
 -- [[ Lifestyle changes ]]
 
 -- Find Regex of the line
-vim.keymap.set('n', '<leader>R', [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
+-- vim.keymap.set('n', '<leader>R', [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]], {desc='Find [R]jgex of the line'})
 
 -- Make current file exicutable
-vim.keymap.set('n', '<leader>x', '<cmd>!chmod +x %<CR>', { silent = true })
+vim.keymap.set('n', '<leader>x', '<cmd>!chmod +x %<CR>', { silent = true, desc='Make file e[x]ecutibale' })
 
 -- Reset lua
-vim.api.nvim_set_keymap('n', '<leader><CR>', '<cmd>lua ReloadConfig()<CR>', { noremap = true, silent = false })
+-- vim.api.nvim_set_keymap('n', '<leader><CR>', '<cmd>lua ReloadConfig()<CR>', { noremap = true, silent = false })
 
 -- Convert current latex file to pdf
-vim.keymap.set('n', '<leader>pdf', '<cmd>!pdflatex %<CR>', { silent = true })
+vim.keymap.set('n', '<leader>pdf', '<cmd>!pdflatex %<CR>', { silent = true, desc='Compile [PDF]' })
 
 -- Json Linting
 vim.keymap.set('n', '<leader>json', function()
   vim.cmd '%!jq .'
-end)
+end, {desc='[JSON] formatting'})
