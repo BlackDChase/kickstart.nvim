@@ -1,3 +1,31 @@
+local function filter_workspaces(potential_workspaces)
+    local validated_workspaces = {} -- Initialize as a sequentially indexed table (array/list)
+
+    if type(potential_workspaces) ~= 'table' then
+        return validated_workspaces
+    end
+
+    for _, ws in ipairs(potential_workspaces) do
+        -- Ensure required keys exist and are strings
+        if ws.name and ws.path and type(ws.name) == 'string' and type(ws.path) == 'string' then
+            
+            local expanded_path = vim.fn.expand(ws.path)
+            
+            -- Check if the directory exists (vim.fn.isdirectory returns 1 for success)
+            if vim.fn.isdirectory(expanded_path) == 1 then
+                
+                -- Use table.insert to append to the list, maintaining the array format
+                table.insert(validated_workspaces, { 
+                    name = ws.name, 
+                    path = expanded_path 
+                })
+            end
+        end
+    end
+
+    return validated_workspaces
+end
+
 return { -- FOr Markdown Files, espeically Obsidian Notes
 	'obsidian-nvim/obsidian.nvim',
 	version = '*', -- recommended, use latest release instead of latest commit
@@ -9,7 +37,7 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 	---@module 'obsidian'
 	---@type obsidian.config
 	opts = {
-		workspaces = {
+		workspaces = filter_workspaces({
 			{
 				name = 'work',
 				path = vim.fn.expand '~' .. '/Documents/obsidian/sai',
@@ -26,7 +54,7 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 				name = "home",
 				path = vim.fn.expand '~' .. '/Documents/obsidian/HomePlan',
 			}
-		},
+		}),
 
 		---@class obsidian.config.TemplateOpts
 		---
@@ -92,8 +120,11 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 		-- Or you can set it to a function that takes a table of options and returns a string, like this:
 		-- wiki_link_func = require('obsidian.util').wiki_link_id_prefix 'use_alias_only',
 		-- Either 'wiki' or 'markdown'.
+
+		-- note_id_func = require("obsidian.util").zettel_id,
+		-- markdown_link_func = require("obsidian.util").markdown_link,
 		wiki_link_func = function()
-			return require("obsidian.util").wiki_link_id_prefix("use_alias_only")
+			return require('obsidian.util').wiki_link_id_prefix("use_alias_only")
 		end,
 
 		-- Either 'wiki' or 'markdown'.
