@@ -88,25 +88,6 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 			create_new = true,
 		},
 
-		-- Optional, configure key mappings. These are the defaults. If you don't want to set any keymappings this
-		-- way then set 'mappings = {}'.
-		mappings = {
-			-- Overrides the 'gf' mapping to work on markdown/wiki links within your vault.
-			[";d"] = {
-				action = function()
-					return require("obsidian").util.gf_passthrough()
-				end,
-				opts = { noremap = false, expr = true, buffer = true },
-			},
-			-- Toggle check-boxes.
-			["<leader>ch"] = {
-				action = function()
-					return require("obsidian").util.toggle_checkbox()
-				end,
-				opts = { buffer = true },
-			},
-		},
-
 		log_level = vim.log.levels.INFO,
 		-- Optional, customize how markdown links are formatted.
 		-- markdown_link_func = function(opts)
@@ -202,4 +183,32 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 		--   },
 		-- },
 	},
+	config = function(_, opts)
+		require("obsidian").setup(opts)
+
+		local workspace_roots = {}
+		for _, ws in ipairs(opts.workspaces or {}) do
+			if ws.path then
+				workspace_roots[#workspace_roots + 1] = vim.fn.expand(ws.path)
+			end
+		end
+
+		vim.api.nvim_create_autocmd("FileType", {
+			pattern = "markdown",
+			callback = function(ev)
+				local bufname = vim.api.nvim_buf_get_name(ev.buf)
+				for _, root in ipairs(workspace_roots) do
+					if vim.startswith(bufname, root) then
+						vim.keymap.set("n", ";d", function()
+							return require("obsidian").util.gf_passthrough()
+						end, { buffer = ev.buf, expr = true, noremap = false, desc = "Obsidian follow link" })
+						vim.keymap.set("n", "<leader>ch", function()
+							return require("obsidian").util.toggle_checkbox()
+						end, { buffer = ev.buf, desc = "Obsidian toggle checkbox" })
+						break
+					end
+				end
+			end,
+		})
+	end,
 }
