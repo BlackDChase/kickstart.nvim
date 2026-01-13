@@ -83,8 +83,7 @@ vim.keymap.set({ 'n', 'v' }, '<leader>Y', '"+Y', {desc='[Y]and para'})
 -- Quick fix navigation
 vim.keymap.set('n', '<leader><s-tab>', vim.cmd.lprev, {desc='Previous Quick fix'})
 vim.keymap.set('n', '<leader><tab>', vim.cmd.lnext, {desc='Next Quick fix'})
-vim.keymap.set('n', '<localleader><s-tab>', vim.cmd.cprev, {desc='Previous quick fix'})
-vim.keymap.set('n', '<localleader><tab>', vim.cmd.cnext, {desc='Next quick fix'})
+-- q[ q] for quickfix navigation (cprev/cnext)
 
 -- File explorer
 -- vim.keymap.set("n", "<leader>vs", function () vim.cmd("30 vs ./") end)
