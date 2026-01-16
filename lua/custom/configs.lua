@@ -84,6 +84,67 @@ vim.opt.undodir = os.getenv 'HOME' .. '/.vim/undodir'
 -- To enable mouse mode, can be useful for resizing splits for example!
 vim.opt.mouse = 'a'
 
+-- [[ Logging ]]
+-- Global defaults (override in your local config if desired):
+--   vim.g.custom_log_level = vim.log.levels.WARN
+--   vim.g.custom_log_levels = { lsp = vim.log.levels.ERROR, mason = vim.log.levels.WARN, ... }
+vim.g.custom_log_level = vim.g.custom_log_level or vim.log.levels.ERROR
+vim.g.custom_log_levels = vim.g.custom_log_levels or {}
+vim.g.custom_log_rotate_bytes = vim.g.custom_log_rotate_bytes or (5 * 1024 * 1024)
+
+-- Reduce LSP log noise + rotate very large log files (keeps a single .1 backup).
+do
+  local function rotate_if_too_large(path, max_bytes)
+    if type(path) ~= 'string' or path == '' then
+      return
+    end
+    local stat = (vim.uv or vim.loop).fs_stat(path)
+    if not stat or type(stat.size) ~= 'number' or stat.size <= max_bytes then
+      return
+    end
+    local backup = path .. '.1'
+    pcall((vim.uv or vim.loop).fs_unlink, backup)
+    pcall((vim.uv or vim.loop).fs_rename, path, backup)
+  end
+
+  vim.api.nvim_create_autocmd({ 'BufReadPre', 'BufNewFile' }, {
+    group = vim.api.nvim_create_augroup('custom-lsp-logging', { clear = true }),
+    once = true,
+    callback = function()
+      pcall(function()
+        local level = vim.g.custom_log_levels.lsp or vim.g.custom_log_level
+        if vim.lsp and vim.lsp.set_log_level then
+          vim.lsp.set_log_level(level)
+        elseif vim.lsp and vim.lsp.log and vim.lsp.log.set_level then
+          vim.lsp.log.set_level(level)
+        end
+      end)
+      local ok, lsp_log = pcall(function()
+        return vim.lsp and vim.lsp.get_log_path and vim.lsp.get_log_path() or nil
+      end)
+      if ok then
+        rotate_if_too_large(lsp_log, vim.g.custom_log_rotate_bytes)
+      end
+    end,
+  })
+end
+
+-- Minimal startup perf signal (prints only when above threshold).
+do
+  local start_ns = (vim.uv or vim.loop).hrtime()
+  local threshold_ms = tonumber(vim.g.startup_slow_ms) or 150
+  vim.api.nvim_create_autocmd('VimEnter', {
+    group = vim.api.nvim_create_augroup('custom-startup-perf', { clear = true }),
+    once = true,
+    callback = function()
+      local elapsed_ms = ((vim.uv or vim.loop).hrtime() - start_ns) / 1e6
+      if elapsed_ms >= threshold_ms then
+        vim.notify(string.format('nvim startup: %.1fms', elapsed_ms), vim.log.levels.WARN)
+      end
+    end,
+  })
+end
+
 -- Sync clipboard between OS and Neovim.
 --  Schedule the setting after `UiEnter` because it can increase startup-time.
 --  Remove this option if you want your OS clipboard to remain independent.

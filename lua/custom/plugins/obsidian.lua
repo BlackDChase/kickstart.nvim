@@ -88,7 +88,7 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 			create_new = true,
 		},
 
-		log_level = vim.log.levels.INFO,
+		log_level = vim.g.custom_log_levels.obsidian or vim.g.custom_log_level,
 		-- Optional, customize how markdown links are formatted.
 		-- markdown_link_func = function(opts)
 		--   return require("obsidian.util").markdown_link(opts)

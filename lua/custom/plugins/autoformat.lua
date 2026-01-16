@@ -13,6 +13,7 @@ return { -- Autoformat
     },
   },
   opts = {
+    log_level = vim.g.custom_log_levels.conform or vim.g.custom_log_level,
     notify_on_error = false,
     format_on_save = false,
     formatters_by_ft = {

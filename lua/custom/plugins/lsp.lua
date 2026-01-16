@@ -1,21 +1,49 @@
 return {
   -- Main LSP Configuration
   'neovim/nvim-lspconfig',
+  event = { 'BufReadPre', 'BufNewFile' },
   dependencies = {
     -- Automatically install LSPs and related tools to stdpath for Neovim
     -- Mason must be loaded before its dependents so we need to set it up here.
     -- NOTE: `opts = {}` is the same as calling `require('mason').setup({})`
-    { 'mason-org/mason.nvim', opts = {} },
+    { 'mason-org/mason.nvim', opts = { log_level = vim.g.custom_log_levels.mason or vim.g.custom_log_level } },
     'mason-org/mason-lspconfig.nvim',
     'WhoIsSethDaniel/mason-tool-installer.nvim',
 
     -- Useful status updates for LSP.
-    { 'j-hui/fidget.nvim', opts = {} },
+    {
+      'j-hui/fidget.nvim',
+      opts = {
+        logger = {
+          level = vim.g.custom_log_levels.fidget or vim.g.custom_log_level,
+          max_size = 1024, -- KB
+        },
+      },
+    },
 
     -- Allows extra capabilities provided by blink.cmp
     'saghen/blink.cmp',
   },
   config = function()
+    local poetry_venv_path ---@type string|false|nil
+    local function get_poetry_venv_path()
+      if poetry_venv_path ~= nil then
+        return poetry_venv_path
+      end
+      if vim.fn.executable 'poetry' ~= 1 then
+        poetry_venv_path = false
+        return poetry_venv_path
+      end
+      local ok, out = pcall(vim.fn.system, { 'poetry', 'env', 'info', '-p' })
+      if not ok then
+        poetry_venv_path = false
+        return poetry_venv_path
+      end
+      out = vim.fn.trim(out or '')
+      poetry_venv_path = (out ~= '' and out) or false
+      return poetry_venv_path
+    end
+
     -- Brief aside: **What is LSP?**
     --
     -- LSP is an initialism you've probably heard, but might not understand what it is.
@@ -227,10 +255,18 @@ return {
           'pyrightconfig.json',
           '.git'
         ),
+        before_init = function(_, config)
+          local venv = get_poetry_venv_path()
+          if not venv then
+            return
+          end
+          config.settings = config.settings or {}
+          config.settings.python = config.settings.python or {}
+          config.settings.python.venvPath = vim.fn.fnamemodify(venv, ':h')
+          config.settings.python.venv = vim.fn.fnamemodify(venv, ':t')
+        end,
         settings = {
           python = {
-            venvPath = vim.fn.fnamemodify(vim.fn.trim(vim.fn.system 'poetry env info -p'), ':h'),
-            venv = vim.fn.fnamemodify(vim.fn.trim(vim.fn.system 'poetry env info -p'), ':t'),
             analysis = {
               autoSearchPaths = true,
               useLibraryCodeForTypes = true,

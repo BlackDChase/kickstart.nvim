@@ -5,6 +5,7 @@
 return {
 	{
 		'lewis6991/gitsigns.nvim',
+		event = { 'BufReadPre', 'BufNewFile' },
 		config = function()
 			require('gitsigns').setup {
 				signs = {
@@ -56,7 +57,7 @@ return {
 				map('n', '<leader>hbr', gitsigns.reset_buffer, { desc = 'buffer git [R]eset' })
 				map('n', '<leader>hu', gitsigns.stage_hunk, { desc = 'git [u]ndo stage hunk' })
 				map('n', '<leader>hp', gitsigns.preview_hunk, { desc = 'git [p]review hunk' })
-				map('n', '<leader>hfb', function() gs.blame_line{full=true} end, { desc = 'git [f]ull [b]lame' })
+				map('n', '<leader>hfb', function() gitsigns.blame_line { full = true } end, { desc = 'git [f]ull [b]lame' })
 				map('n', '<leader>hb', gitsigns.blame_line, { desc = 'git [b]lame line' })
 				map('n', '<leader>hd', gitsigns.diffthis, { desc = 'git [d]iff against index' })
 				map('n', '<leader>hdc', function()

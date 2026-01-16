@@ -2,6 +2,7 @@ return { -- Highlight, edit, and navigate code
 	'nvim-treesitter/nvim-treesitter',
 	build = ':TSUpdate',
 	main = 'nvim-treesitter.configs', -- Sets main module to use for opts
+	event = { 'BufReadPre', 'BufNewFile' },
 	-- [[ Configure Treesitter ]] See `:help nvim-treesitter`
 	opts = {
 		ensure_installed = {
@@ -33,7 +34,8 @@ return { -- Highlight, edit, and navigate code
 			'yaml',
 		},
 		-- Autoinstall languages that are not installed
-		auto_install = true,
+		-- (disabled for faster/offline-friendly startup; use :TSInstall/:TSUpdate)
+		auto_install = false,
 		highlight = {
 			enable = true,
 			-- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.

@@ -2,6 +2,7 @@ return {
     -- The plugin should be a table entry within the return table
     {
         'LunarVim/bigfile.nvim',
+        event = { 'BufReadPre', 'BufNewFile' },
         -- Priority is usually unnecessary if lazy loading is used,
         -- but kept for compliance with your original intent (1001)
         priority = 1001,

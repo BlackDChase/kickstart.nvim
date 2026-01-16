@@ -1,5 +1,19 @@
 return {
   'stevearc/oil.nvim',
+  cmd = { 'Oil' },
+  keys = {
+    {
+      '-',
+      function()
+        local dir = vim.fn.expand '%:p:h'
+        vim.cmd.vnew()
+        require('oil').open(dir)
+        vim.cmd.wincmd 'H'
+        vim.api.nvim_win_set_width(0, 25)
+      end,
+      desc = 'Oil file explorer',
+    },
+  },
   ---@module 'oil'
   ---@type oil.SetupOpts
   opts = {
@@ -41,12 +55,5 @@ return {
     extra_scp_args = {},
     use_default_keymaps = true,
   },
-  dependencies = { { 'echasnovski/mini.icons', opts = {} } },
-  vim.keymap.set('n', '-', function()
-    local dir = vim.fn.expand '%:p:h' -- get directory before splitting
-    vim.cmd.vnew()
-    require('oil').open(dir)
-    vim.cmd.wincmd 'H'
-    vim.api.nvim_win_set_width(0, 25)
-  end, { desc = 'Oil file explorer' }),
 }
+
