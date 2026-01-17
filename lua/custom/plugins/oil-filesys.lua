@@ -5,35 +5,33 @@ return {
     {
       '-',
       function()
-        local dir = vim.fn.expand '%:p:h'
-        vim.cmd.vnew()
-        require('oil').open(dir)
-        vim.cmd.wincmd 'H'
-        vim.api.nvim_win_set_width(0, 25)
+        require('custom.oil_drawer').toggle()
       end,
-      desc = 'Oil file explorer',
+      desc = 'Toggle Oil drawer',
     },
   },
   ---@module 'oil'
   ---@type oil.SetupOpts
   opts = {
+    default_file_explorer = false,
     columns = {
       'icon',
       -- 'permissions',
       -- 'size',
       -- 'mtime',
     },
+    win_options = {
+      winbar = '%!v:lua.require("custom.oil_drawer").winbar()',
+    },
     keymaps = {
-      ['<CR>'] = 'actions.select',
-      ['<C-s>'] = 'actions.select_split',
-      ['<C-v>'] = 'actions.select_vsplit',
-      ['<C-t>'] = 'actions.select_tab',
-      ['q'] = 'actions.close',
-      ['₹'] = { 'actions.cd', opts = { scope = 'tab' }, mode = 'n' },
-      ['<leader>fr'] = 'actions.refresh',
-      ['_'] = { 'actions.open_cwd', mode = 'n' },
-      -- ['gs'] = { 'actions.change_sort', mode = 'n' },
-      -- ['g?'] = 'actions.show_help',
+      ['<BS>'] = { 'actions.parent', mode = 'n' },
+      ['<CR>'] = {
+        function()
+          require('custom.oil_drawer').select()
+        end,
+        mode = 'n',
+        desc = 'Open (file in main)',
+      },
     },
     view_options = {
       show_hidden = true,
@@ -56,4 +54,3 @@ return {
     use_default_keymaps = true,
   },
 }
-
