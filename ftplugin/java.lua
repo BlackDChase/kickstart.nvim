@@ -47,8 +47,21 @@ local function normalize_jdk_path(path)
     return nil
   end
   local expanded = vim.fn.fnamemodify(vim.fn.expand(path), ':p')
+  local function has_java_bin(home)
+    local java_bin = home .. '/bin/java'
+    return vim.fn.filereadable(java_bin) == 1 or vim.fn.executable(java_bin) == 1
+  end
   if vim.fn.isdirectory(expanded) == 1 then
-    return expanded
+    expanded = vim.fn.fnamemodify(expanded, ':p')
+    if has_java_bin(expanded) then
+      return expanded
+    end
+    -- Homebrew openjdk@XX often points to a prefix like /opt/homebrew/opt/openjdk@21
+    -- where the actual JAVA_HOME lives under libexec/openjdk.jdk/Contents/Home.
+    local brew_java_home = expanded .. '/libexec/openjdk.jdk/Contents/Home'
+    if vim.fn.isdirectory(brew_java_home) == 1 and has_java_bin(brew_java_home) then
+      return vim.fn.fnamemodify(brew_java_home, ':p')
+    end
   end
   if vim.fn.filereadable(expanded) == 1 then
     local parent = vim.fn.fnamemodify(expanded, ':h')
@@ -56,7 +69,10 @@ local function normalize_jdk_path(path)
       parent = vim.fn.fnamemodify(parent, ':h')
     end
     if vim.fn.isdirectory(parent) == 1 then
-      return vim.fn.fnamemodify(parent, ':p')
+      parent = vim.fn.fnamemodify(parent, ':p')
+      if has_java_bin(parent) then
+        return parent
+      end
     end
   end
   return nil
@@ -89,9 +105,34 @@ local function detect_java21_home()
   return nil
 end
 
+local function java_major_version(java_home)
+  if not java_home then
+    return nil
+  end
+  local java_bin = java_home .. '/bin/java'
+  if vim.fn.executable(java_bin) ~= 1 then
+    return nil
+  end
+  local out = vim.fn.system({ java_bin, '-version' })
+  if vim.v.shell_error ~= 0 then
+    return nil
+  end
+  -- Example: openjdk version "21.0.2"  or  java version "21"
+  local major = out:match('version%s+"(%d+)') or out:match('version%s+"(%d+)%.')
+  return tonumber(major)
+end
+
 local java21_home = detect_java21_home()
-if not java21_home then
-  vim.notify_once('jdtls requires a Java 21 runtime. Set $JDTLS_JAVA_HOME (or install a JDK 21 available via /usr/libexec/java_home).', vim.log.levels.ERROR)
+local java21_major = java_major_version(java21_home)
+if not java21_home or not java21_major or java21_major < 21 then
+  vim.notify_once(
+    'jdtls requires a Java 21 runtime.\n'
+      .. '- Recommended: set $JDTLS_JAVA_HOME to a real JAVA_HOME (it must contain bin/java)\n'
+      .. '  Example (Homebrew): export JDTLS_JAVA_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home"\n'
+      .. '- Current: '
+      .. (java21_home and ('JDTLS_JAVA_HOME=' .. java21_home .. ' (major=' .. tostring(java21_major) .. ')') or 'not found'),
+    vim.log.levels.ERROR
+  )
   return
 end
 

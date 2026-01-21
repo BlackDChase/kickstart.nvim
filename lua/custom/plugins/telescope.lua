@@ -73,7 +73,7 @@ return { -- Fuzzy Finder (files, lsp, etc)
 
 		local builtin = require 'telescope.builtin'
 		local project_actions = require 'telescope._extensions.project.actions'
-		require('custom.telescope_projects').setup()
+		require('custom.telescope.projects').setup()
 
 		vim.keymap.set('n', '<leader>sh', builtin.help_tags, { desc = '[S]earch [H]elp' })
 		vim.keymap.set('n', '<leader>sk', builtin.keymaps, { desc = '[S]earch [K]eymaps' })
@@ -102,8 +102,16 @@ return { -- Fuzzy Finder (files, lsp, etc)
 		end, { desc = '[S]earch [P]rojects: [A]dd cwd' })
 
 		vim.keymap.set('n', '<leader>spg', function()
-			require('custom.telescope_projects').add_project_from_current_buffer()
+			require('custom.telescope.projects').add_project_from_current_buffer()
 		end, { desc = '[S]earch [P]rojects: add from current buffer' })
+
+		vim.keymap.set('n', '<leader>gdb', function()
+			require('custom.telescope.git').diff_current_file_against_branch()
+		end, { desc = '[G]it [D]iff current file vs [B]ranch' })
+
+		vim.keymap.set('n', '<leader>gm', function()
+			require('telescope').extensions.git_submodules.git_submodules()
+		end, { desc = '[G]it Sub[M]odules' })
 
 		vim.keymap.set('n', '<leader>/', function()
 			builtin.current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {

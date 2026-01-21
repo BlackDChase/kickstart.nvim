@@ -5,7 +5,7 @@ return {
     {
       '-',
       function()
-        require('custom.oil_drawer').toggle()
+        require('custom.oil.drawer').toggle()
       end,
       desc = 'Toggle Oil drawer',
     },
@@ -21,13 +21,13 @@ return {
       -- 'mtime',
     },
     win_options = {
-      winbar = '%!v:lua.require("custom.oil_drawer").winbar()',
+      winbar = '%!v:lua.require("custom.oil.drawer").winbar()',
     },
     keymaps = {
       ['<BS>'] = { 'actions.parent', mode = 'n' },
       ['<CR>'] = {
         function()
-          require('custom.oil_drawer').select()
+          require('custom.oil.drawer').select()
         end,
         mode = 'n',
         desc = 'Open (file in main)',

@@ -3,6 +3,9 @@ return { -- Highlight, edit, and navigate code
 	build = ':TSUpdate',
 	main = 'nvim-treesitter.configs', -- Sets main module to use for opts
 	event = { 'BufReadPre', 'BufNewFile' },
+	dependencies = {
+		'nvim-treesitter/nvim-treesitter-textobjects',
+	},
 	-- [[ Configure Treesitter ]] See `:help nvim-treesitter`
 	opts = {
 		ensure_installed = {
@@ -44,6 +47,42 @@ return { -- Highlight, edit, and navigate code
 			additional_vim_regex_highlighting = { 'ruby' },
 		},
 		indent = { enable = true, disable = { 'ruby' } },
+		incremental_selection = {
+			enable = true,
+			keymaps = {
+				init_selection = 'gnn',
+				node_incremental = 'grn',
+				scope_incremental = 'grc',
+				node_decremental = 'grm',
+			},
+		},
+		textobjects = {
+			move = {
+				enable = true,
+				set_jumps = true,
+				goto_next_start = {
+					[']f'] = '@function.outer',
+				},
+				goto_next_end = {
+					[']F'] = '@function.outer',
+				},
+				goto_previous_start = {
+					['[f'] = '@function.outer',
+				},
+				goto_previous_end = {
+					['[F'] = '@function.outer',
+				},
+			},
+			swap = {
+				enable = true,
+				swap_next = {
+					[']a'] = '@parameter.inner',
+				},
+				swap_previous = {
+					['[a'] = '@parameter.inner',
+				},
+			},
+		},
 	},
 	-- There are additional nvim-treesitter modules that you can use to interact
 	-- with nvim-treesitter. You should go explore a few and see what interests you:

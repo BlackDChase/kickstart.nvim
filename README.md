@@ -10,6 +10,147 @@ A starting point for Neovim that is:
 
 **NOT** a Neovim distribution, but instead a starting point for your configuration.
 
+## Keybindings
+
+Leader: `<Space>` (`vim.g.mapleader`), LocalLeader: `\` (`vim.g.maplocalleader`).
+
+This config also has `which-key.nvim` enabled, so many mappings are discoverable by pausing after `<leader>` / `<localleader>`.
+
+### General
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `S` | n/v | Save (`:update`) |
+| `\|` | n/v | Quit (`:q`) |
+| `Q` | n | Disabled |
+| `<Esc>` | n | Clear search highlight (`:noh`) |
+| `<leader>p` | n/v/x | Paste without yanking (blackhole) |
+| `<leader>y`, `<leader>Y` | n/v | Yank to system clipboard |
+| `<leader>e` | n | Diagnostic float |
+| `<leader>q` | n | Diagnostics to loclist |
+| `<leader>x` | n | `chmod +x %` |
+| `<leader>pdf` | n | `pdflatex %` |
+| `<leader>json` | n | Format buffer via `jq` |
+
+### Movement / View
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `<C-u>`, `<C-d>` | n | Page up/down, keep cursor centered |
+| `n`, `N` | n | Next/prev search result, keep cursor centered |
+
+### Buffers / Tabs
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `<A-[>`, `<A-]>` | n | Next/prev buffer |
+| `<A-BS>` | n | Delete buffer |
+| `<leader>tn` | n | New tab |
+| `<Tab>`, `<S-Tab>` | n | Next/prev tab |
+| `<leader><Tab>`, `<leader><S-Tab>` | n | Next/prev loclist entry |
+
+### Windows / Terminal
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `<C-h>`, `<C-j>`, `<C-k>`, `<C-l>` | n | Move focus between splits |
+| `zH`, `zJ`, `zK`, `zL` | n/t | Move current window (wincmd H/J/K/L) |
+| `<A-h>`, `<A-j>`, `<A-k>`, `<A-l>` | n/t | Resize splits |
+| `<Esc><Esc>` | t | Exit terminal-mode |
+| `<leader>ct` | n | Open small terminal below (channel) |
+| `<leader>cs` | n | Send command to that terminal |
+
+### Treesitter
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `gnn` | n | Start incremental selection |
+| `grn`, `grm`, `grc` | n | Expand / shrink / scope selection |
+| `[f`, `]f` | n | Prev/next function start |
+| `[F`, `]F` | n | Prev/next function end |
+| `[a`, `]a` | n | Swap parameter with prev/next |
+
+### Telescope
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `<leader>sh` | n | Help tags |
+| `<leader>sk` | n | Keymaps |
+| `<leader>sf` | n | Find files |
+| `<leader>sg` | n | Live grep |
+| `<leader>sw` | n | Grep string under cursor |
+| `<leader>sd` | n | Diagnostics picker |
+| `<leader>sr` | n | Resume last picker |
+| `<leader>s.` | n | Recent files |
+| `<leader><leader>` | n | Buffers |
+| `<leader>sn` | n | Search Neovim config files |
+| `<leader>/` | n | Fuzzy find in current buffer |
+| `<leader>s/` | n | Live grep in open files |
+| `<C-f>` | n | Prompted grep string |
+| `<C-o>` | n | Git files |
+| `<leader>sp`, `<leader>sP` | n | Projects (minimal/full) |
+| `<leader>spa` | n | Add current cwd as project |
+| `<leader>spg` | n | Add project from current buffer location |
+| `<leader>gdb` | n | Diff current file vs branch (pick branch) |
+| `<leader>gsm` | n | Git submodules picker |
+| `<leader>gco` | n | Git branches picker |
+
+### LSP (buffer-local on attach)
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `<localleader>n` | n | Rename |
+| `<localleader>a` | n/x | Code action |
+| `<localleader>h` | n | Hover |
+| `<localleader>s` | i | Signature help |
+| `<localleader>r` | n | References (Telescope) |
+| `<localleader>i` | n | Implementations (Telescope) |
+| `<localleader>d` | n | Definitions (Telescope) |
+| `<localleader>e` | n | Declaration |
+| `<localleader>o` | n | Document symbols (Telescope) |
+| `<localleader>w` | n | Workspace symbols (Telescope) |
+| `<localleader>t` | n | Type definition (Telescope) |
+| `<localleader>[`, `<localleader>]` | n | Prev/next diagnostic + code action |
+| `<leader>th` | n | Toggle inlay hints (if supported) |
+
+### Git
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `<leader>gs` | n | Fugitive status (tab) |
+| `<leader>gc` | n | Fugitive commit |
+| `<leader>gb` | n | Fugitive blame |
+| `<leader>g1`, `<leader>g2`, `<leader>g3` | n | `diffget` LO/BA/RE |
+| `<leader>gh`, `<leader>gl` | n | `diffget` //2 and //3 |
+| `dt` | n | FugitiveIndex: open diff in tab |
+| `[c`, `]c` | n | Prev/next hunk |
+| `<leader>hs`, `<leader>hr` | n/v | Stage/reset hunk |
+| `<leader>hbs`, `<leader>hbr` | n | Stage/reset buffer |
+| `<leader>hu` | n | Undo stage hunk |
+| `<leader>hp` | n | Preview hunk |
+| `<leader>hb`, `<leader>hfb` | n | Blame line (normal/full) |
+| `<leader>hd`, `<leader>hdc` | n | Diff (index / last commit) |
+| `<leader>htb`, `<leader>htD` | n | Toggle blame / preview deleted |
+| `hs` | o/x | Select hunk textobject |
+
+### Debug (DAP)
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `<F5>` | n | Continue |
+| `<F1>`, `<F2>`, `<F3>` | n | Step into/over/out |
+| `<leader>b`, `<leader>B` | n | Toggle/set breakpoint |
+| `<F7>` | n | Toggle DAP UI |
+
+### Notes (Obsidian)
+
+| Shortcut | Mode | Action |
+| --- | --- | --- |
+| `;d` | n | Follow link (Obsidian markdown only) |
+| `<leader>ch` | n | Toggle checkbox (Obsidian markdown only) |
+
+For a longer, more free-form reference, see `CHEATS.md`.
+
 ## Installation
 
 ### Install Neovim
@@ -238,4 +379,3 @@ sudo dnf install -y gcc make git ripgrep fd-find unzip neovim
 sudo pacman -S --noconfirm --needed gcc make git ripgrep fd unzip neovim
 ```
 </details>
-
