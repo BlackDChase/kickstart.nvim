@@ -25,6 +25,15 @@ return {
     'saghen/blink.cmp',
   },
   config = function()
+    local lsp_attach_start_ns_by_buf = {} ---@type table<integer, integer>
+
+    vim.api.nvim_create_autocmd({ 'BufReadPre', 'BufNewFile' }, {
+      group = vim.api.nvim_create_augroup('custom-lsp-timing', { clear = true }),
+      callback = function(ev)
+        lsp_attach_start_ns_by_buf[ev.buf] = (vim.uv or vim.loop).hrtime()
+      end,
+    })
+
     local poetry_venv_path ---@type string|false|nil
     local function get_poetry_venv_path()
       if poetry_venv_path ~= nil then
@@ -86,6 +95,18 @@ return {
           vim.keymap.set(mode, keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
         end
 
+        do
+          local threshold_ms = tonumber(vim.g.lsp_attach_slow_ms) or 400
+          local start_ns = lsp_attach_start_ns_by_buf[event.buf]
+          if start_ns then
+            local elapsed_ms = ((vim.uv or vim.loop).hrtime() - start_ns) / 1e6
+            if elapsed_ms >= threshold_ms then
+              vim.notify(string.format('LSP attach: %.0fms', elapsed_ms), vim.log.levels.WARN)
+            end
+          end
+          lsp_attach_start_ns_by_buf[event.buf] = nil
+        end
+
         local function prevDiadnosticAction(options)
           options.count = -1
           options.float = true
@@ -143,6 +164,23 @@ return {
         --  Useful when you're not sure what type a variable is and you want to see
         --  the definition of its *type*, not where it was *defined*.
         map('<localleader>t', require('telescope.builtin').lsp_type_definitions, 'Goto [T]ype Definition')
+        map('<localleader>Wa', vim.lsp.buf.add_workspace_folder, 'Add [W]orkspace Folder')
+        map('<localleader>Wr', vim.lsp.buf.remove_workspace_folder, 'Remove [W]orkspace Folder')
+        map('<localleader>Wl', function()
+          print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+        end, 'List [W]orkspace Folders')
+
+        if client and client_supports_method(client, vim.lsp.protocol.Methods.textDocument_incomingCalls, event.buf) then
+          map('<localleader>Ci', vim.lsp.buf.incoming_calls, '[C]alls [i]ncoming')
+        end
+        if client and client_supports_method(client, vim.lsp.protocol.Methods.textDocument_outgoingCalls, event.buf) then
+          map('<localleader>Co', vim.lsp.buf.outgoing_calls, '[C]alls [o]utgoing')
+        end
+
+        if client and client_supports_method(client, vim.lsp.protocol.Methods.textDocument_codeLens, event.buf) then
+          map('<localleader>lR', vim.lsp.codelens.refresh, 'Code[l]ens [R]efresh')
+          map('<localleader>lr', vim.lsp.codelens.run, 'Code[l]ens [r]un')
+        end
 
         -- This function resolves a difference between neovim nightly (version 0.11) and stable (version 0.10)
         ---@param client vim.lsp.Client
@@ -282,7 +320,12 @@ return {
       --    https://github.com/pmizio/typescript-tools.nvim
       --
       -- But for many setups, the LSP (`ts_ls`) will work just fine
-      ts_ls = {},
+      ts_ls = {
+        on_attach = function(client)
+          client.server_capabilities.documentFormattingProvider = false
+          client.server_capabilities.documentRangeFormattingProvider = false
+        end,
+      },
       --
 
       lua_ls = {

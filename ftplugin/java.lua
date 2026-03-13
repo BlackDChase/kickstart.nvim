@@ -136,6 +136,28 @@ if not java21_home or not java21_major or java21_major < 21 then
   return
 end
 
+local java21_bin = java21_home .. '/bin/java'
+if vim.fn.executable(java21_bin) ~= 1 then
+  vim.notify_once(('jdtls: Java 21 binary not executable: %s'):format(java21_bin), vim.log.levels.ERROR)
+  return
+end
+
+local function wipe_jdtls_workspace()
+  local bufnr = vim.api.nvim_get_current_buf()
+  for _, client in ipairs(vim.lsp.get_clients { name = 'jdtls', bufnr = bufnr }) do
+    client.stop(true)
+  end
+
+  local ok_delete = pcall(vim.fn.delete, workspace_dir, 'rf')
+  if not ok_delete then
+    vim.notify(('jdtls: failed to delete workspace %s'):format(workspace_dir), vim.log.levels.ERROR)
+    return
+  end
+  vim.notify(('jdtls: wiped workspace %s (reopen project to reimport)'):format(workspace_dir), vim.log.levels.WARN)
+end
+
+vim.api.nvim_create_user_command('JdtlsWipeWorkspace', wipe_jdtls_workspace, { desc = 'Delete jdtls workspace for this project' })
+
 local bundles = {}
 local function add_bundles(glob)
   for _, jar in ipairs(vim.split(vim.fn.glob(glob, 1), '\n', { plain = true })) do
@@ -182,6 +204,8 @@ local cmd = {
   ('JAVA_HOME=%s'):format(java21_home),
   ('PATH=%s/bin:%s'):format(java21_home, path_env),
   jdtls_path .. '/bin/jdtls',
+  '--java-executable',
+  java21_bin,
 }
 
 local jvm_args = {

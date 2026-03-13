@@ -114,8 +114,13 @@ Numeber of times a particular action was refered back here is added as a counter
 ```vim
 :argdo v/\(public \(class\|.*(\)\|@Path(\|@ApiOperation\|@RolesAllowed\)/d | %s/\(@Path(\|@RolesAllowed\|value =\|public \|Response \|{\|}\|(\|)\|@ApiOperation\|class \| \{2,\}\)//g | w
 ```
+1 Execute macro on all buffers
 ```vim
 :bufdo execute "normal @a" | write
+1 Remove non ascii characters from log statements in all quick fix list
+```
+```vim
+:cfdo %s/\(log[^(]*(\s*['"]\)\@<=\(.\{-}\)\(['"]\s*)\)/\=substitute(submatch(0), '[^\x00-\x7f]', '', 'g')/g | update
 ```
 1 Write a-z
 `:r !printf '\%s' {a..z}`

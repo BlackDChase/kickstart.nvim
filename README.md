@@ -28,6 +28,7 @@ This config also has `which-key.nvim` enabled, so many mappings are discoverable
 | `<leader>y`, `<leader>Y` | n/v | Yank to system clipboard |
 | `<leader>e` | n | Diagnostic float |
 | `<leader>q` | n | Diagnostics to loclist |
+| `<leader>Q` | n | Diagnostics to quickfix |
 | `<leader>x` | n | `chmod +x %` |
 | `<leader>pdf` | n | `pdflatex %` |
 | `<leader>json` | n | Format buffer via `jq` |
@@ -80,6 +81,7 @@ This config also has `which-key.nvim` enabled, so many mappings are discoverable
 | `<leader>sg` | n | Live grep |
 | `<leader>sw` | n | Grep string under cursor |
 | `<leader>sd` | n | Diagnostics picker |
+| `<leader>sD` | n | Diagnostics picker (buffer) |
 | `<leader>sr` | n | Resume last picker |
 | `<leader>s.` | n | Recent files |
 | `<leader><leader>` | n | Buffers |
@@ -110,6 +112,9 @@ This config also has `which-key.nvim` enabled, so many mappings are discoverable
 | `<localleader>o` | n | Document symbols (Telescope) |
 | `<localleader>w` | n | Workspace symbols (Telescope) |
 | `<localleader>t` | n | Type definition (Telescope) |
+| `<localleader>Wa`, `<localleader>Wr`, `<localleader>Wl` | n | Workspace folders add/remove/list |
+| `<localleader>Ci`, `<localleader>Co` | n | Incoming/outgoing calls (if supported) |
+| `<localleader>lR`, `<localleader>lr` | n | CodeLens refresh/run (if supported) |
 | `<localleader>[`, `<localleader>]` | n | Prev/next diagnostic + code action |
 | `<leader>th` | n | Toggle inlay hints (if supported) |
 
@@ -148,6 +153,16 @@ This config also has `which-key.nvim` enabled, so many mappings are discoverable
 | --- | --- | --- |
 | `;d` | n | Follow link (Obsidian markdown only) |
 | `<leader>ch` | n | Toggle checkbox (Obsidian markdown only) |
+
+### Java (jdtls)
+
+| Shortcut / Command | Mode | Action |
+| --- | --- | --- |
+| `:JdtlsWipeWorkspace` | cmd | Delete the per-project jdtls workspace and stop jdtls (use if workspace metadata gets corrupted) |
+
+Notes:
+- jdtls requires **Java 21+**. This config forces jdtls to use the Java 21 binary resolved from `$JDTLS_JAVA_HOME` (Homebrew prefix is supported).
+- If you see errors like `jdtls requires at least Java 21` or Eclipse workspace `.metadata` save errors, set a correct `$JDTLS_JAVA_HOME` and run `:JdtlsWipeWorkspace`, then reopen the project.
 
 For a longer, more free-form reference, see `CHEATS.md`.
 
