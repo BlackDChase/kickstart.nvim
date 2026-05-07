@@ -10,8 +10,74 @@ if not root_dir then
   return
 end
 
+local large_project_roots = vim.g.lsp_large_project_roots or {}
+local debounce_default = tonumber(vim.g.lsp_debounce_ms) or 150
+local debounce_by_server = vim.g.lsp_debounce_ms_by_server or {}
+local debounce_large = tonumber(vim.g.lsp_debounce_ms_large) or 400
+
+local function is_large_project_root(dir)
+  if not dir or dir == '' then
+    return false
+  end
+  if vim.g.lsp_large_project == true then
+    return true
+  end
+  for _, root in ipairs(large_project_roots) do
+    if dir == root then
+      return true
+    end
+  end
+  return false
+end
+
+local function get_debounce_ms(dir)
+  local override = debounce_by_server.jdtls
+  if type(override) == 'number' then
+    return override
+  end
+  if is_large_project_root(dir) then
+    return debounce_large
+  end
+  return debounce_default
+end
+
+local is_large_project = is_large_project_root(root_dir)
+
 local workspace_dir = vim.fn.stdpath 'data' .. '/java-workspaces/' .. vim.fn.fnamemodify(root_dir, ':p:gs?/?_?')
 vim.fn.mkdir(workspace_dir, 'p')
+
+local jdtls_auto_build = vim.g.jdtls_auto_build
+if jdtls_auto_build == nil then
+  jdtls_auto_build = false
+end
+
+local jdtls_maven_download_sources = vim.g.jdtls_maven_download_sources
+if jdtls_maven_download_sources == nil then
+  jdtls_maven_download_sources = false
+end
+
+local jdtls_include_decompiled_sources = vim.g.jdtls_include_decompiled_sources
+if jdtls_include_decompiled_sources == nil then
+  jdtls_include_decompiled_sources = false
+end
+
+local jdtls_import_on_first_start = vim.g.jdtls_import_on_first_start or 'interactive'
+local jdtls_import_exclusions = vim.g.jdtls_import_exclusions or {
+  '**/node_modules/**',
+  '**/target/**',
+  '**/build/**',
+  '**/out/**',
+  '**/.gradle/**',
+  '**/.idea/**',
+}
+
+local jdtls_codelens_auto_refresh = vim.g.jdtls_codelens_auto_refresh
+if jdtls_codelens_auto_refresh == nil then
+  jdtls_codelens_auto_refresh = false
+end
+
+local jdtls_reduce_heap = vim.g.jdtls_reduce_heap or false
+local jdtls_jvm_args_extra = vim.g.jdtls_jvm_args or {}
 
 local registry = require 'mason-registry'
 local install_location = require('mason-core.installer.InstallLocation').global()
@@ -222,6 +288,30 @@ if has_lombok then
   })
 end
 
+local function add_jvm_arg(arg)
+  if type(arg) ~= 'string' or arg == '' then
+    return
+  end
+  if arg:match('^%-%-jvm%-arg=') then
+    table.insert(jvm_args, arg)
+  else
+    table.insert(jvm_args, '--jvm-arg=' .. arg)
+  end
+end
+
+if jdtls_reduce_heap then
+  add_jvm_arg '-Xms256m'
+  add_jvm_arg '-Xmx1024m'
+end
+
+if vim.islist(jdtls_jvm_args_extra) then
+  for _, arg in ipairs(jdtls_jvm_args_extra) do
+    add_jvm_arg(arg)
+  end
+elseif type(jdtls_jvm_args_extra) == 'string' then
+  add_jvm_arg(jdtls_jvm_args_extra)
+end
+
 vim.list_extend(cmd, jvm_args)
 
 vim.list_extend(cmd, {
@@ -232,24 +322,32 @@ vim.list_extend(cmd, {
 local config = {
   cmd = cmd,
   root_dir = root_dir,
+  flags = {
+    debounce_text_changes = get_debounce_ms(root_dir),
+  },
   settings = {
     java = {
+      autobuild = {
+        enabled = jdtls_auto_build,
+      },
       configuration = {
         updateBuildConfiguration = 'interactive',
         runtimes = runtimes,
       },
+      project = {
+        importOnFirstTimeStartup = jdtls_import_on_first_start,
+        encoding = 'UTF-8',
+      },
       maven = {
-        downloadSources = true,
+        downloadSources = jdtls_maven_download_sources,
       },
       import = {
         maven = { enabled = true },
         gradle = { enabled = true },
+        exclusions = jdtls_import_exclusions,
       },
       references = {
-        includeDecompiledSources = true,
-      },
-      project = {
-        encoding = 'UTF-8',
+        includeDecompiledSources = jdtls_include_decompiled_sources,
       },
       signatureHelp = { enabled = true },
       completion = {
@@ -300,14 +398,43 @@ local config = {
       jdtls.extract_method(true)
     end, 'Java: Extract Method')
 
-    if client.server_capabilities.codeLensProvider then
+    if client.server_capabilities.codeLensProvider and jdtls_codelens_auto_refresh and not is_large_project then
       vim.api.nvim_create_autocmd({ 'BufEnter', 'CursorHold' }, {
         buffer = bufnr,
-        callback = vim.lsp.codelens.refresh,
+        callback = function()
+          if vim.b[bufnr].lsp_paused or vim.b[bufnr].lsp_edit_mode then
+            return
+          end
+          vim.lsp.codelens.refresh()
+        end,
       })
     end
   end,
 }
+
+local function count_project_modules()
+  local total = 0
+  local patterns = { '**/pom.xml', '**/build.gradle', '**/build.gradle.kts', '**/settings.gradle', '**/settings.gradle.kts' }
+  for _, pattern in ipairs(patterns) do
+    local matches = vim.fn.globpath(root_dir, pattern, false, true)
+    total = total + #matches
+  end
+  return total
+end
+
+vim.api.nvim_create_user_command('JdtlsProjectInfo', function()
+  local attach_ms = vim.b.lsp_attach_ms
+  local module_count = count_project_modules()
+  local lines = {
+    ('root: %s'):format(root_dir),
+    ('workspace: %s'):format(workspace_dir),
+    ('modules/build files: %d'):format(module_count),
+    ('last attach: %s'):format(attach_ms and string.format('%.0fms', attach_ms) or 'n/a'),
+    ('autobuild: %s'):format(tostring(jdtls_auto_build)),
+    ('downloadSources: %s'):format(tostring(jdtls_maven_download_sources)),
+  }
+  vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
+end, { desc = 'Show jdtls project info + last attach timing' })
 
 -- local formatter = vim.fn.stdpath 'config' .. '/ftplugin/JavaCodeStyle.xml'
 -- if vim.fn.filereadable(formatter) == 1 then

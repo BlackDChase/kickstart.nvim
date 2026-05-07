@@ -11,12 +11,19 @@ return { -- Collection of various small independent plugins/modules
 
     -- Add/delete/replace surroundings (brackets, quotes, etc.)
     --
-    -- - saiw) - [S]urround [A]dd [I]nner [W]ord [)]Paren
-    -- - sd'   - [S]urround [D]elete [']quotes
-    -- - sr)'  - [S]urround [R]eplace [)] [']
-    -- - sa$?  - [S]urround [A]dd until [$] custom prompt [?]
     require('mini.surround').setup {
       highlight_duration = 1000,
+      mappings = {
+        add = '<localleader>sa',
+        delete = '<localleader>sd',
+        find = '<localleader>sf',
+        find_left = '<localleader>sF',
+        highlight = '<localleader>sh',
+        replace = '<localleader>sr',
+
+        suffix_last = 'l',
+        suffix_next = 'n',
+      },
     }
 
     -- Simple and easy statusline.
