@@ -92,6 +92,12 @@ vim.g.custom_log_level = vim.g.custom_log_level or vim.log.levels.ERROR
 vim.g.custom_log_levels = vim.g.custom_log_levels or {}
 vim.g.custom_log_rotate_bytes = vim.g.custom_log_rotate_bytes or (5 * 1024 * 1024)
 
+vim.filetype.add {
+  extension = {
+    mdc = 'markdown',
+  },
+}
+
 -- Reduce LSP log noise + rotate very large log files (keeps a single .1 backup).
 do
   local function rotate_if_too_large(path, max_bytes)
