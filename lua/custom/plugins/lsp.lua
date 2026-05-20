@@ -268,6 +268,19 @@ return {
           vim.lsp.buf.code_action(options)
         end
 
+		vim.g.diagnostics_active = true
+		local function toggle_diagnostics()
+		  if vim.g.diagnostics_active then
+			vim.g.diagnostics_active = false
+			vim.diagnostic.enable(false) -- Disables diagnostics for the current buffer
+			print("Diagnostics Off")
+		  else
+			vim.g.diagnostics_active = true
+			vim.diagnostic.enable(true) -- Enables diagnostics for the current buffer
+			print("Diagnostics On")
+		  end
+		end
+
         -- Rename the variable under your cursor.
         --  Most Language Servers support renaming across files, etc.
         map('<localleader>n', vim.lsp.buf.rename, 'Re[n]ame')
@@ -286,6 +299,7 @@ return {
         map('<localleader>g', vim.diagnostic.open_float, 'Open Dia[g]nostic')
         map('<localleader>[', prevDiadnosticAction, 'Prev Diagnostic + Code Action')
         map('<localleader>]', nextDiadnosticAction, 'Next Diagnostic + Code Action')
+		map('<localleader>c', toggle_diagnostics, '[C]ode diagnostics toggle', 'n')
 
         -- Jump to the implementation of the word under your cursor.
         --  Useful when your language has ways of declaring types without an actual implementation.

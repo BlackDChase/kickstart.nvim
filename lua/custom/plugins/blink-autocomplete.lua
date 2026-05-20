@@ -63,6 +63,7 @@ return { -- Autocompletion
 		--     "fang2hou/blink-copilot"
 		--   }
 		-- },
+		{ 'rafamadriz/friendly-snippets' },
 	},
 
 	--- @module 'blink.cmp'
@@ -112,6 +113,7 @@ return { -- Autocompletion
 				'lsp',
 				'path',
 				'snippets',
+				'buffer',
 				'lazydev',
 				-- NOTE: To use copilot with blink
 				-- 'copilot',
@@ -144,4 +146,6 @@ return { -- Autocompletion
 		-- Shows a signature help window while you type arguments for a function
 		signature = { enabled = true },
 	},
+
+	opts_extend = { "sources.default" }
 }
