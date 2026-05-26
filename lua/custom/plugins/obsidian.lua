@@ -104,12 +104,12 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 
 		-- note_id_func = require("obsidian.util").zettel_id,
 		-- markdown_link_func = require("obsidian.util").markdown_link,
-		wiki_link_func = function()
-			return require('obsidian.util').wiki_link_id_prefix("use_alias_only")
-		end,
+		-- wiki_link_func = function()
+		-- 	return require('obsidian.util').wiki_link_id_prefix("use_alias_only")
+		-- end,
 
 		-- Either 'wiki' or 'markdown'.
-		preferred_link_style = 'wiki',
+		-- preferred_link_style = 'wiki',
 
 		---@class obsidian.config.FrontmatterOpts
 		---
