@@ -17,6 +17,8 @@ return { -- Fuzzy Finder (files, lsp, etc)
 		{ 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
 	},
 	config = function()
+		local actions = require 'telescope.actions'
+
 		-- See `:help telescope` and `:help telescope.setup()`
 		require('telescope').setup {
 			defaults = {
@@ -35,6 +37,10 @@ return { -- Fuzzy Finder (files, lsp, etc)
 					i = {
 						['<c-enter>'] = 'to_fuzzy_refine',
 						['<c-h>'] = 'which_key',
+						['<c-l>'] = actions.send_to_loclist + actions.open_loclist,
+					},
+					n = {
+						['<c-l>'] = actions.send_to_loclist + actions.open_loclist,
 					},
 				},
 			},
@@ -74,6 +80,7 @@ return { -- Fuzzy Finder (files, lsp, etc)
 		pcall(require('telescope').load_extension, 'symbols')
 
 		local builtin = require 'telescope.builtin'
+
 		local project_actions = require 'telescope._extensions.project.actions'
 		require('custom.telescope.projects').setup()
 
@@ -148,7 +155,7 @@ return { -- Fuzzy Finder (files, lsp, etc)
 				search = vim.fn.input 'grep string > ',
 				use_regex = true,
 			}
-		end)
+		end, { desc = 'Search by regex c-[F]ind' })
 
 		vim.keymap.set('n', '<leader>gco', builtin.git_branches, { desc = '[G]it [c]heckout [b]ranches' })
 	end,

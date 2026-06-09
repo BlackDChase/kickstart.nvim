@@ -16,8 +16,8 @@ vim.keymap.set('n', 'Q', '<nop>')
 
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Show diagnostic [E]rror message' })
-vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Diagnostics to [q]loclist' })
-vim.keymap.set('n', '<leader>Q', vim.diagnostic.setqflist, { desc = 'Diagnostics to [Q]quickfix' })
+vim.keymap.set('n', '<leader>Q', vim.diagnostic.setloclist, { desc = 'Diagnostics to [Q]loclist' })
+vim.keymap.set('n', '<leader>q', vim.diagnostic.setqflist, { desc = 'Diagnostics to [q]uickfix' })
 
 -- TIP: Disable arrow keys in normal mode
 vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
@@ -82,9 +82,10 @@ vim.keymap.set({ 'n', 'v' }, '<leader>y', '"+y', {desc='[Y]ank para'})
 vim.keymap.set({ 'n', 'v' }, '<leader>Y', '"+Y', {desc='[Y]and para'})
 
 -- Quick fix navigation
-vim.keymap.set('n', '<leader><s-tab>', vim.cmd.lprev, {desc='Previous Quick fix'})
-vim.keymap.set('n', '<leader><tab>', vim.cmd.lnext, {desc='Next Quick fix'})
--- q[ q] for quickfix navigation (cprev/cnext)
+vim.keymap.set('n', '<leader>l[', vim.cmd.lprev, {desc='Previous Location List'})
+vim.keymap.set('n', '<leader>l]', vim.cmd.lnext, {desc='Next Location List'})
+vim.keymap.set('n', '<leader>q[', vim.cmd.cprev, {desc='Previous Quick fix'})
+vim.keymap.set('n', '<leader>q]', vim.cmd.lnext, {desc='Next Quick fix'})
 
 -- File explorer
 -- vim.keymap.set("n", "<leader>vs", function () vim.cmd("30 vs ./") end)
