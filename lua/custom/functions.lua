@@ -1,3 +1,5 @@
+-- Functions `F`
+
 local function defineMacro(fileType, group, key, macro, desc)
     vim.api.nvim_create_autocmd({'FileType'}, {
       pattern = fileType,

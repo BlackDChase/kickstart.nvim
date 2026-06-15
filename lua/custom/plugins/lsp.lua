@@ -1,3 +1,4 @@
+-- LSP `L`
 return {
   -- Main LSP Configuration
   'neovim/nvim-lspconfig',
