@@ -28,6 +28,7 @@ return {
   config = function()
     local lsp_attach_start_ns_by_buf = {} ---@type table<integer, integer>
     local lsp_attach_ms_by_buf = {} ---@type table<integer, number>
+    local first_paint_ms_by_buf = {} ---@type table<integer, number>
     local lsp_attach_counts = vim.g.lsp_attach_counts or {}
     vim.g.lsp_attach_counts = lsp_attach_counts
 
@@ -174,24 +175,235 @@ return {
         lsp_attach_start_ns_by_buf[ev.buf] = (vim.uv or vim.loop).hrtime()
       end,
     })
+    vim.api.nvim_create_autocmd('BufWinEnter', {
+      group = vim.api.nvim_create_augroup('custom-buffer-paint-timing', { clear = true }),
+      callback = function(ev)
+        if first_paint_ms_by_buf[ev.buf] then
+          return
+        end
+        local start_ns = lsp_attach_start_ns_by_buf[ev.buf]
+        if not start_ns then
+          return
+        end
+        local elapsed_ms = ((vim.uv or vim.loop).hrtime() - start_ns) / 1e6
+        first_paint_ms_by_buf[ev.buf] = elapsed_ms
+        vim.b[ev.buf].first_paint_ms = elapsed_ms
+      end,
+    })
 
-    local poetry_venv_path ---@type string|false|nil
-    local function get_poetry_venv_path()
-      if poetry_venv_path ~= nil then
-        return poetry_venv_path
+    local uv = vim.uv or vim.loop
+    local python_root_markers = {
+      'pyproject.toml',
+      'poetry.lock',
+      'setup.py',
+      'setup.cfg',
+      'requirements.txt',
+      'Pipfile',
+      'pyrightconfig.json',
+    }
+    local python_fallback_markers = { '.git' }
+    local poetry_env_cache = {} ---@type table<string, string|false>
+
+    local function path_exists(path)
+      return path and path ~= '' and uv.fs_stat(path) ~= nil
+    end
+
+    local function path_is_dir(path)
+      local stat = path and uv.fs_stat(path) or nil
+      return stat and stat.type == 'directory' or false
+    end
+
+    local function has_any_marker(dir, markers)
+      for _, marker in ipairs(markers) do
+        if path_exists(dir .. '/' .. marker) then
+          return true
+        end
       end
-      if vim.fn.executable 'poetry' ~= 1 then
-        poetry_venv_path = false
-        return poetry_venv_path
+      return false
+    end
+
+    local function normalize_input_path(path_or_buf)
+      if type(path_or_buf) == 'number' then
+        if path_or_buf <= 0 or not vim.api.nvim_buf_is_valid(path_or_buf) then
+          return nil
+        end
+        local resolved = vim.api.nvim_buf_get_name(path_or_buf)
+        return resolved ~= '' and resolved or nil
       end
-      local ok, out = pcall(vim.fn.system, { 'poetry', 'env', 'info', '-p' })
+      if type(path_or_buf) == 'string' and path_or_buf ~= '' then
+        if vim.startswith(path_or_buf, 'file://') then
+          return vim.uri_to_fname(path_or_buf)
+        end
+        return path_or_buf
+      end
+      return nil
+    end
+
+    local function iter_ancestors(path_or_buf)
+      local dirs = {}
+      local path = normalize_input_path(path_or_buf)
+      if not path then
+        return dirs
+      end
+      local dir = path_is_dir(path) and vim.fs.normalize(path) or vim.fs.normalize(vim.fs.dirname(path))
+      while dir and dir ~= '' do
+        dirs[#dirs + 1] = dir
+        local parent = vim.fs.dirname(dir)
+        if not parent or parent == dir then
+          break
+        end
+        dir = parent
+      end
+      return dirs
+    end
+
+    local function resolve_topmost_python_root(path_or_buf)
+      local path = normalize_input_path(path_or_buf)
+      if not path then
+        return nil
+      end
+      local topmost_python_root
+      local nearest_fallback_root
+      for _, dir in ipairs(iter_ancestors(path)) do
+        if has_any_marker(dir, python_root_markers) then
+          topmost_python_root = dir
+        elseif not nearest_fallback_root and has_any_marker(dir, python_fallback_markers) then
+          nearest_fallback_root = dir
+        end
+      end
+      return topmost_python_root or nearest_fallback_root
+    end
+
+    local function resolve_poetry_env(root_dir)
+      if not root_dir or root_dir == '' then
+        return nil
+      end
+      if poetry_env_cache[root_dir] ~= nil then
+        local cached = poetry_env_cache[root_dir]
+        return cached or nil
+      end
+
+      local resolved = nil
+      if vim.fn.executable 'poetry' == 1 then
+        local ok, out = pcall(vim.fn.system, { 'poetry', '-C', root_dir, 'env', 'info', '-p' })
+        if ok then
+          out = vim.fn.trim(out or '')
+          if out ~= '' and path_is_dir(out) then
+            resolved = out
+          end
+        end
+      end
+
+      if not resolved then
+        local local_venv = root_dir .. '/.venv'
+        if path_is_dir(local_venv) then
+          resolved = local_venv
+        end
+      end
+
+      if not resolved then
+        local virtual_env = vim.env.VIRTUAL_ENV or os.getenv 'VIRTUAL_ENV'
+        if virtual_env and virtual_env ~= '' and path_is_dir(virtual_env) then
+          resolved = virtual_env
+        end
+      end
+
+      poetry_env_cache[root_dir] = resolved or false
+      return resolved
+    end
+
+    local function resolve_python_interpreter(venv)
+      if not venv or venv == '' then
+        return nil
+      end
+      local python_bin = venv .. '/bin/python'
+      if vim.fn.executable(python_bin) == 1 then
+        return python_bin
+      end
+      return nil
+    end
+
+    local python_ensure_inflight = {} ---@type table<integer, boolean>
+
+    local function ensure_python_servers(bufnr)
+      if not vim.api.nvim_buf_is_valid(bufnr) or vim.bo[bufnr].filetype ~= 'python' then
+        return
+      end
+      if python_ensure_inflight[bufnr] then
+        return
+      end
+      python_ensure_inflight[bufnr] = true
+
+      local ok, err = pcall(function()
+        local function has_client(name)
+          for _, c in ipairs(vim.lsp.get_clients { bufnr = bufnr, name = name }) do
+            if c then
+              return true
+            end
+          end
+          return false
+        end
+
+        if not has_client 'pyright' then
+          pcall(vim.cmd, 'LspStart pyright')
+        end
+
+        if not has_client 'pyright' and vim.lsp.start then
+          local root = resolve_topmost_python_root(bufnr)
+          if root then
+            local venv = resolve_poetry_env(root)
+            local python = resolve_python_interpreter(venv)
+            local settings = {
+              python = {
+                analysis = {
+                  autoSearchPaths = true,
+                  useLibraryCodeForTypes = true,
+                  typeCheckingMode = vim.g.pyright_type_checking or 'basic',
+                  diagnosticMode = vim.g.pyright_diagnostic_mode or 'openFilesOnly',
+                },
+              },
+            }
+            if venv then
+              settings.python.venvPath = vim.fn.fnamemodify(venv, ':h')
+              settings.python.venv = vim.fn.fnamemodify(venv, ':t')
+              if python then
+                settings.python.pythonPath = python
+              end
+            end
+
+            local pyright_cmd = vim.fn.stdpath 'data' .. '/mason/bin/pyright-langserver'
+            local cmd = vim.fn.executable(pyright_cmd) == 1 and { pyright_cmd, '--stdio' } or { 'pyright-langserver', '--stdio' }
+            pcall(vim.lsp.start, {
+              name = 'pyright',
+              cmd = cmd,
+              root_dir = root,
+              settings = settings,
+              flags = {
+                debounce_text_changes = get_debounce_ms('pyright', root),
+              },
+              capabilities = require('blink.cmp').get_lsp_capabilities(),
+            }, { bufnr = bufnr })
+          end
+        end
+
+        if not has_client 'ruff' then
+          pcall(vim.cmd, 'LspStart ruff')
+        end
+      end)
+
+      python_ensure_inflight[bufnr] = nil
       if not ok then
-        poetry_venv_path = false
-        return poetry_venv_path
+        vim.notify(('ensure_python_servers failed: %s'):format(tostring(err)), vim.log.levels.WARN)
       end
-      out = vim.fn.trim(out or '')
-      poetry_venv_path = (out ~= '' and out) or false
-      return poetry_venv_path
+    end
+
+    local function python_root_dir(arg1, arg2)
+      local root = resolve_topmost_python_root(arg1)
+      if type(arg2) == 'function' then
+        arg2(root)
+        return
+      end
+      return root
     end
 
     -- Brief aside: **What is LSP?**
@@ -234,6 +446,50 @@ return {
         local map = function(keys, func, desc, mode)
           mode = mode or 'n'
           vim.keymap.set(mode, keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
+        end
+
+        local function python_definition()
+          local preferred = { 'pyright', 'basedpyright' }
+          local target_client = nil
+          for _, name in ipairs(preferred) do
+            for _, c in ipairs(vim.lsp.get_clients { bufnr = event.buf, name = name }) do
+              if client_supports_method(c, vim.lsp.protocol.Methods.textDocument_definition, event.buf) then
+                target_client = c
+                break
+              end
+            end
+            if target_client then
+              break
+            end
+          end
+          if not target_client then
+            local attached = vim.tbl_map(function(c)
+              return c.name
+            end, vim.lsp.get_clients { bufnr = event.buf })
+            local msg = #attached > 0 and ('Python definition unavailable. Attached: ' .. table.concat(attached, ', ')) or 'Python definition unavailable. No LSP client attached yet.'
+            vim.notify(msg, vim.log.levels.WARN)
+            return
+          end
+
+          local params = vim.lsp.util.make_position_params(0, target_client.offset_encoding)
+          target_client:request(vim.lsp.protocol.Methods.textDocument_definition, params, function(err, result)
+            if err then
+              vim.notify(('Python definition error: %s'):format(err.message or tostring(err)), vim.log.levels.WARN)
+              return
+            end
+            if not result or vim.tbl_isempty(result) then
+              vim.notify('No Python definitions found', vim.log.levels.WARN)
+              return
+            end
+            local locations = vim.islist(result) and result or { result }
+            local ok = pcall(vim.lsp.util.show_document, locations[1], target_client.offset_encoding, {
+              focus = true,
+              reuse_win = true,
+            })
+            if ok and #locations > 1 then
+              vim.fn.setqflist(vim.lsp.util.locations_to_items(locations, target_client.offset_encoding), 'r')
+            end
+          end, event.buf)
         end
 
         do
@@ -309,7 +565,11 @@ return {
         -- Jump to the definition of the word under your cursor.
         --  This is where a variable was first declared, or where a function is defined, etc.
         --  To jump back, press <C-t>.
-        map('<localleader>d', require('telescope.builtin').lsp_definitions, 'Goto [D]efinition')
+        if vim.bo[event.buf].filetype == 'python' then
+          map('<localleader>d', python_definition, 'Goto [D]efinition')
+        else
+          map('<localleader>d', require('telescope.builtin').lsp_definitions, 'Goto [D]efinition')
+        end
 
         -- WARN: This is not Goto Definition, this is Goto Declaration.
         --  For example, in C this would take you to the header.
@@ -461,9 +721,65 @@ return {
         table.insert(lines, string.format('%s | cmd=%s | root=%s | attaches=%d', client.name, cmd, root, lsp_attach_counts[client.name] or 0))
       end
       local attach_ms = lsp_attach_ms_by_buf[bufnr]
+      local first_paint_ms = first_paint_ms_by_buf[bufnr]
       table.insert(lines, string.format('last attach: %s', attach_ms and string.format('%.0fms', attach_ms) or 'n/a'))
+      table.insert(lines, string.format('first paint: %s', first_paint_ms and string.format('%.0fms', first_paint_ms) or 'n/a'))
       vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
     end, { desc = 'Show LSP clients + last attach timing' })
+
+    pcall(vim.api.nvim_del_user_command, 'PyrightProjectInfo')
+    vim.api.nvim_create_user_command('PyrightProjectInfo', function()
+      local current_buf = vim.api.nvim_get_current_buf()
+      local buf_path = vim.api.nvim_buf_get_name(current_buf)
+      local resolved_root = resolve_topmost_python_root(buf_path)
+      local resolved_venv = resolved_root and resolve_poetry_env(resolved_root) or nil
+      local resolved_python = resolve_python_interpreter(resolved_venv)
+      local attached_clients = vim.tbl_map(function(c)
+        return c.name
+      end, vim.lsp.get_clients { bufnr = current_buf })
+      local lines = {
+        ('buffer: %s'):format(buf_path ~= '' and buf_path or 'n/a'),
+        ('root: %s'):format(resolved_root or 'n/a'),
+        ('poetry env: %s'):format(resolved_venv or 'n/a'),
+        ('python: %s'):format(resolved_python or 'n/a'),
+        ('first paint: %s'):format(first_paint_ms_by_buf[current_buf] and string.format('%.1fms', first_paint_ms_by_buf[current_buf]) or 'n/a'),
+        ('last attach: %s'):format(lsp_attach_ms_by_buf[current_buf] and string.format('%.1fms', lsp_attach_ms_by_buf[current_buf]) or 'n/a'),
+        ('attached clients: %s'):format(#attached_clients > 0 and table.concat(attached_clients, ', ') or 'none'),
+      }
+      for _, client in ipairs(vim.lsp.get_clients { bufnr = current_buf }) do
+        if client.name == 'pyright' or client.name == 'ruff' then
+          lines[#lines + 1] = ('%s root: %s'):format(client.name, client.config and client.config.root_dir or 'n/a')
+        end
+      end
+      vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
+    end, { desc = 'Show Python project root/env/interpreter info' })
+
+    pcall(vim.api.nvim_del_user_command, 'PyrightRestart')
+    vim.api.nvim_create_user_command('PyrightRestart', function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      for _, client in ipairs(vim.lsp.get_clients { bufnr = bufnr }) do
+        if client.name == 'pyright' or client.name == 'ruff' then
+          pcall(vim.lsp.stop_client, client.id)
+        end
+      end
+      vim.defer_fn(function()
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          ensure_python_servers(bufnr)
+        end
+      end, 50)
+    end, { desc = 'Restart pyright and ruff for current Python buffer' })
+
+    vim.api.nvim_create_autocmd('FileType', {
+      group = vim.api.nvim_create_augroup('custom-python-lsp-ensure', { clear = true }),
+      pattern = 'python',
+      callback = function(ev)
+        vim.schedule(function()
+          if vim.api.nvim_buf_is_valid(ev.buf) then
+            ensure_python_servers(ev.buf)
+          end
+        end)
+      end,
+    })
 
     -- Diagnostic Config
     -- See :help vim.diagnostic.Opts
@@ -513,24 +829,24 @@ return {
       -- clangd = {},
       -- gopls = {},
       pyright = {
-        root_dir = require('lspconfig.util').root_pattern(
-          'pyproject.toml',
-          'setup.py',
-          'setup.cfg',
-          'requirements.txt',
-          'Pipfile',
-          'pyrightconfig.json',
-          '.git'
-        ),
+        root_dir = python_root_dir,
         before_init = function(_, config)
-          local venv = get_poetry_venv_path()
+          local root = config.root_dir
+          if not root or root == '' then
+            root = resolve_topmost_python_root(vim.api.nvim_buf_get_name(0))
+          end
+          local venv = resolve_poetry_env(root)
           if not venv then
             return
           end
+          local python = resolve_python_interpreter(venv)
           config.settings = config.settings or {}
           config.settings.python = config.settings.python or {}
           config.settings.python.venvPath = vim.fn.fnamemodify(venv, ':h')
           config.settings.python.venv = vim.fn.fnamemodify(venv, ':t')
+          if python then
+            config.settings.python.pythonPath = python
+          end
         end,
         settings = {
           python = {
@@ -542,6 +858,9 @@ return {
             },
           },
         },
+      },
+      ruff = {
+        root_dir = python_root_dir,
       },
       -- rust_analyzer = {},
       -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
@@ -592,6 +911,9 @@ return {
       'vimls',
       'dockerls',
       'pyright',
+      'ruff',
+      'black',
+      'isort',
       'jdtls',
       'java-debug-adapter',
       'java-test',
@@ -626,5 +948,12 @@ return {
         },
       },
     }
+
+    local current = vim.api.nvim_get_current_buf()
+    if vim.bo[current].filetype == 'python' then
+      vim.schedule(function()
+        ensure_python_servers(current)
+      end)
+    end
   end,
 }

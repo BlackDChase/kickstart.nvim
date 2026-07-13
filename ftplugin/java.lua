@@ -178,6 +178,8 @@ if not root_state then
     extras_initialized = false,
     config = nil,
     module_count = nil,
+    runtime_classpaths = nil,
+    source_cache = {},
     last_error = nil,
   }
   cache.root_states[root_dir] = root_state
@@ -355,6 +357,116 @@ local function build_symbol_queries(target_bufnr, symbol)
   return queries
 end
 
+local function resolve_fqcn_from_imports(target_bufnr, symbol)
+  local package_name, imports = buffer_import_context(target_bufnr)
+  for _, import in ipairs(imports) do
+    if import:sub(-#symbol) == symbol then
+      return import
+    end
+  end
+  if package_name then
+    return package_name .. '.' .. symbol
+  end
+  return nil
+end
+
+local function execute_command_sync(client, target_bufnr, command, arguments, timeout_ms)
+  local method = protocol.Methods.workspace_executeCommand or 'workspace/executeCommand'
+  local response, wait_error = request_sync(client, method, {
+    command = command,
+    arguments = arguments,
+  }, timeout_ms or 2000, target_bufnr)
+  local error_obj = (response and response.err) or wait_error
+  if error_obj then
+    return nil, error_obj
+  end
+  local result = response and response.result
+  if result and result.body then
+    result = result.body
+  end
+  return result, nil
+end
+
+local function resolve_runtime_classpaths(client, target_bufnr)
+  local state = get_current_root_state()
+  if state and state.runtime_classpaths then
+    return state.runtime_classpaths
+  end
+  local uri = vim.uri_from_bufnr(target_bufnr)
+  local options = vim.fn.json_encode { scope = 'runtime' }
+  local result, err = execute_command_sync(client, target_bufnr, 'java.project.getClasspaths', { uri, options }, 3000)
+  if err or not result or type(result.classpaths) ~= 'table' then
+    return {}
+  end
+  if state then
+    state.runtime_classpaths = result.classpaths
+  end
+  return result.classpaths
+end
+
+local function read_source_from_jar(jar_path, rel_path)
+  if vim.fn.executable 'unzip' ~= 1 then
+    return nil
+  end
+  local content = vim.fn.system({ 'unzip', '-p', jar_path, rel_path })
+  if vim.v.shell_error ~= 0 or not content or content == '' then
+    return nil
+  end
+  return content
+end
+
+local function open_java_source_text(fqcn, source_text, source_hint)
+  local source_root = vim.fn.stdpath 'state' .. '/jdtls-sources'
+  local relative = fqcn:gsub('%.', '/') .. '.java'
+  local target = source_root .. '/' .. relative
+  vim.fn.mkdir(vim.fs.dirname(target), 'p')
+  local lines = vim.split(source_text, '\n', { plain = true })
+  pcall(vim.fn.writefile, lines, target)
+  vim.cmd('edit ' .. vim.fn.fnameescape(target))
+  if source_hint and source_hint ~= '' then
+    vim.b.jdtls_source_hint = source_hint
+  end
+  return true
+end
+
+local function open_from_classpaths(client, target_bufnr, symbol)
+  local fqcn = resolve_fqcn_from_imports(target_bufnr, symbol)
+  if not fqcn or fqcn == '' then
+    return false
+  end
+
+  local state = get_current_root_state()
+  if state and state.source_cache and state.source_cache[fqcn] and vim.fn.filereadable(state.source_cache[fqcn]) == 1 then
+    vim.cmd('edit ' .. vim.fn.fnameescape(state.source_cache[fqcn]))
+    return true
+  end
+
+  local rel_path = fqcn:gsub('%.', '/') .. '.java'
+  local classpaths = resolve_runtime_classpaths(client, target_bufnr)
+  for _, classpath in ipairs(classpaths) do
+    if vim.fn.isdirectory(classpath) == 1 then
+      local candidate = classpath .. '/' .. rel_path
+      if vim.fn.filereadable(candidate) == 1 then
+        vim.cmd('edit ' .. vim.fn.fnameescape(candidate))
+        if state then
+          state.source_cache[fqcn] = candidate
+        end
+        return true
+      end
+    elseif classpath:sub(-12) == '-sources.jar' and vim.fn.filereadable(classpath) == 1 then
+      local source_text = read_source_from_jar(classpath, rel_path)
+      if source_text and open_java_source_text(fqcn, source_text, classpath) then
+        if state then
+          state.source_cache[fqcn] = vim.api.nvim_buf_get_name(0)
+        end
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
 local function symbol_candidates(client, target_bufnr, symbol)
   local queries = build_symbol_queries(target_bufnr, symbol)
   local dedupe = {}
@@ -430,6 +542,10 @@ local function java_definition_fallback(target_bufnr)
   local symbol = vim.fn.expand '<cword>'
   local candidates = symbol_candidates(client, target_bufnr, symbol)
   if #candidates == 0 then
+    if open_from_classpaths(client, target_bufnr, symbol) then
+      log_trace(('definition_classpath_fallback root=%s symbol=%s'):format(root_dir, symbol))
+      return
+    end
     local reason = lsp_error and (lsp_error.message or tostring(lsp_error)) or 'no-result'
     log_trace(('definition_fallback_empty root=%s symbol=%s reason=%s'):format(root_dir, symbol, reason))
     vim.notify('No Java definitions found', vim.log.levels.WARN)
@@ -477,10 +593,11 @@ local function create_commands()
       ('root marker: %s'):format(state.root_marker or 'n/a'),
       ('workspace: %s'):format(state.workspace_dir),
       ('modules/build files: %d'):format(count_project_modules(state)),
-      ('last attach: %s'):format(vim.b.lsp_attach_ms and ('%.0fms'):format(vim.b.lsp_attach_ms) or 'n/a'),
-      ('sync ftplugin: %s'):format(vim.b.jdtls_sync_ftplugin_ms and ('%.0fms'):format(vim.b.jdtls_sync_ftplugin_ms) or 'n/a'),
-      ('jdtls bootstrap: %s'):format(state.bootstrap_ms and ('%.0fms'):format(state.bootstrap_ms) or 'pending'),
-      ('start_or_attach: %s'):format(state.last_start_or_attach_ms and ('%.0fms'):format(state.last_start_or_attach_ms) or 'n/a'),
+      ('first paint: %s'):format(vim.b.first_paint_ms and ('%.1fms'):format(vim.b.first_paint_ms) or 'n/a'),
+      ('last attach: %s'):format(vim.b.lsp_attach_ms and ('%.1fms'):format(vim.b.lsp_attach_ms) or 'n/a'),
+      ('sync ftplugin: %s'):format(vim.b.jdtls_sync_ftplugin_ms and ('%.1fms'):format(vim.b.jdtls_sync_ftplugin_ms) or 'n/a'),
+      ('jdtls bootstrap: %s'):format(state.bootstrap_ms and ('%.1fms'):format(state.bootstrap_ms) or 'pending'),
+      ('start_or_attach: %s'):format(state.last_start_or_attach_ms and ('%.1fms'):format(state.last_start_or_attach_ms) or 'n/a'),
       ('autobuild: %s'):format(tostring(state.jdtls_auto_build)),
       ('downloadSources: %s'):format(tostring(state.jdtls_maven_download_sources)),
       ('includeDecompiledSources: %s'):format(tostring(state.jdtls_include_decompiled_sources)),

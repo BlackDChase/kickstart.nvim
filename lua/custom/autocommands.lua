@@ -32,6 +32,21 @@ vim.api.nvim_create_autocmd('TermOpen', {
   end,
 })
 
+-- Create missing parent directories on save to avoid E212 for new paths.
+vim.api.nvim_create_autocmd('BufWritePre', {
+  group = vim.api.nvim_create_augroup('custom-auto-mkdir-on-save', { clear = true }),
+  callback = function(event)
+    local file = vim.api.nvim_buf_get_name(event.buf)
+    if file == '' or file:match '^%w+://' then
+      return
+    end
+    local dir = vim.fn.fnamemodify(file, ':p:h')
+    if dir ~= '' and vim.fn.isdirectory(dir) == 0 then
+      vim.fn.mkdir(dir, 'p')
+    end
+  end,
+})
+
 
 
 -- Latex
@@ -40,4 +55,3 @@ local latex_macros = vim.api.nvim_create_augroup('latex', { clear = true })
 defineMacro("tex", latex_macros, "b" , 'c\\\\textbf{}\\<ESC>P', "[B]old selected text")
 defineMacro("tex", latex_macros, "s" , 'c\\\\secret{}\\<ESC>P', "[S]ecretize selected text")
 defineMacro("tex", latex_macros, "i" , 'c\\\\textit{}\\<ESC>P', "[I]talic selected text")
-

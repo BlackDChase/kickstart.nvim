@@ -124,7 +124,7 @@ Numeber of times a particular action was refered back here is added as a counter
 ```
 1 Write a-z
 `:r !printf '\%s' {a..z}`
-3 Incremental Numbers, Block select then:
+4 Incremental Numbers, Block select then:
 `s/^/\=printf('%d, ', line('.') - line("'<") + 1)`
 
 ## Screen Play

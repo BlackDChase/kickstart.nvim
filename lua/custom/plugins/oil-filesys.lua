@@ -10,6 +10,10 @@ return {
       desc = 'Toggle Oil drawer',
     },
   },
+  config = function(_, opts)
+    require('oil').setup(opts)
+    require('custom.oil.drawer').setup_commands()
+  end,
   ---@module 'oil'
   ---@type oil.SetupOpts
   opts = {
@@ -31,6 +35,34 @@ return {
         end,
         mode = 'n',
         desc = 'Open (file in main)',
+      },
+      ['S'] = {
+        function()
+          require('custom.oil.drawer').select_split()
+        end,
+        mode = 'n',
+        desc = 'Open file (choose split)',
+      },
+      ['m'] = {
+        function()
+          require('custom.oil.drawer').toggle_mark()
+        end,
+        mode = 'n',
+        desc = 'Toggle file mark',
+      },
+      ['gb'] = {
+        function()
+          require('custom.oil.drawer').add_to_buffer_list()
+        end,
+        mode = { 'n', 'v' },
+        desc = 'Add marked/selected files to buffer list',
+      },
+      ['gM'] = {
+        function()
+          require('custom.oil.drawer').clear_marks()
+        end,
+        mode = 'n',
+        desc = 'Clear file marks',
       },
     },
     view_options = {
