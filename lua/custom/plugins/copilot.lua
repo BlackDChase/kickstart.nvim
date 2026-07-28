@@ -1,6 +1,8 @@
 return {
   -- Start GitHub Copilot by calling `Copilot setup`
   'github/copilot.vim',
+  -- Disabled by default during LSP stabilization. Set this to true in a local config to re-enable.
+  enabled = vim.g.enable_copilot_during_lsp_stabilization == true,
   event = 'InsertEnter',
   cmd = { 'Copilot' },
   config = function()

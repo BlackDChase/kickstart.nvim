@@ -30,6 +30,12 @@ return {
     local lsp_attach_ms_by_buf = {} ---@type table<integer, number>
     local first_paint_ms_by_buf = {} ---@type table<integer, number>
     local lsp_attach_counts = vim.g.lsp_attach_counts or {}
+    local lifecycle = {
+      attaches = {},
+      detaches = {},
+      events = {},
+      debug = vim.g.lsp_lifecycle_debug == true,
+    }
     vim.g.lsp_attach_counts = lsp_attach_counts
 
     local format_disable = vim.g.lsp_format_disable or {}
@@ -150,23 +156,24 @@ return {
       end
     end
 
-    local function hard_pause(bufnr)
-      vim.b[bufnr].lsp_hard_paused = true
-      set_lsp_paused(bufnr, true)
-      for _, client in ipairs(vim.lsp.get_clients { bufnr = bufnr }) do
-        pcall(vim.lsp.stop_client, client.id)
+    local function lifecycle_event(kind, bufnr, client_name)
+      local event = {
+        time = os.date '%H:%M:%S',
+        kind = kind,
+        bufnr = bufnr,
+        ft = vim.bo[bufnr] and vim.bo[bufnr].filetype or 'n/a',
+        client = client_name or 'n/a',
+      }
+      lifecycle.events[#lifecycle.events + 1] = event
+      if #lifecycle.events > 80 then
+        table.remove(lifecycle.events, 1)
       end
-    end
-
-    local function hard_resume(bufnr)
-      vim.b[bufnr].lsp_hard_paused = false
-      local ft = vim.bo[bufnr].filetype
-      if ft == 'java' then
-        vim.api.nvim_exec_autocmds('FileType', { buffer = bufnr })
-      else
-        pcall(vim.cmd, 'LspStart')
+      if lifecycle.debug then
+        vim.notify(
+          ('LSP lifecycle %s | buf=%d ft=%s client=%s'):format(event.kind, event.bufnr, event.ft, event.client),
+          vim.log.levels.INFO
+        )
       end
-      set_lsp_paused(bufnr, false)
     end
 
     vim.api.nvim_create_autocmd({ 'BufReadPre', 'BufNewFile' }, {
@@ -321,80 +328,6 @@ return {
         return python_bin
       end
       return nil
-    end
-
-    local python_ensure_inflight = {} ---@type table<integer, boolean>
-
-    local function ensure_python_servers(bufnr)
-      if not vim.api.nvim_buf_is_valid(bufnr) or vim.bo[bufnr].filetype ~= 'python' then
-        return
-      end
-      if python_ensure_inflight[bufnr] then
-        return
-      end
-      python_ensure_inflight[bufnr] = true
-
-      local ok, err = pcall(function()
-        local function has_client(name)
-          for _, c in ipairs(vim.lsp.get_clients { bufnr = bufnr, name = name }) do
-            if c then
-              return true
-            end
-          end
-          return false
-        end
-
-        if not has_client 'pyright' then
-          pcall(vim.cmd, 'LspStart pyright')
-        end
-
-        if not has_client 'pyright' and vim.lsp.start then
-          local root = resolve_topmost_python_root(bufnr)
-          if root then
-            local venv = resolve_poetry_env(root)
-            local python = resolve_python_interpreter(venv)
-            local settings = {
-              python = {
-                analysis = {
-                  autoSearchPaths = true,
-                  useLibraryCodeForTypes = true,
-                  typeCheckingMode = vim.g.pyright_type_checking or 'basic',
-                  diagnosticMode = vim.g.pyright_diagnostic_mode or 'openFilesOnly',
-                },
-              },
-            }
-            if venv then
-              settings.python.venvPath = vim.fn.fnamemodify(venv, ':h')
-              settings.python.venv = vim.fn.fnamemodify(venv, ':t')
-              if python then
-                settings.python.pythonPath = python
-              end
-            end
-
-            local pyright_cmd = vim.fn.stdpath 'data' .. '/mason/bin/pyright-langserver'
-            local cmd = vim.fn.executable(pyright_cmd) == 1 and { pyright_cmd, '--stdio' } or { 'pyright-langserver', '--stdio' }
-            pcall(vim.lsp.start, {
-              name = 'pyright',
-              cmd = cmd,
-              root_dir = root,
-              settings = settings,
-              flags = {
-                debounce_text_changes = get_debounce_ms('pyright', root),
-              },
-              capabilities = require('blink.cmp').get_lsp_capabilities(),
-            }, { bufnr = bufnr })
-          end
-        end
-
-        if not has_client 'ruff' then
-          pcall(vim.cmd, 'LspStart ruff')
-        end
-      end)
-
-      python_ensure_inflight[bufnr] = nil
-      if not ok then
-        vim.notify(('ensure_python_servers failed: %s'):format(tostring(err)), vim.log.levels.WARN)
-      end
     end
 
     local function python_root_dir(arg1, arg2)
@@ -594,6 +527,10 @@ return {
         end, 'List [W]orkspace Folders')
 
         local client = vim.lsp.get_client_by_id(event.data.client_id)
+        if client then
+          lifecycle.attaches[client.name] = (lifecycle.attaches[client.name] or 0) + 1
+          lifecycle_event('attach', event.buf, client.name)
+        end
 
         if client and client_supports_method(client, vim.lsp.protocol.Methods.textDocument_incomingCalls, event.buf) then
           map('<localleader>Ci', vim.lsp.buf.incoming_calls, '[C]alls [i]ncoming')
@@ -704,14 +641,6 @@ return {
       set_edit_mode(bufnr, not vim.b[bufnr].lsp_edit_mode)
     end, { desc = 'Toggle LSP edit mode in current buffer' })
 
-    vim.api.nvim_create_user_command('LspHardPause', function()
-      hard_pause(vim.api.nvim_get_current_buf())
-    end, { desc = 'Stop LSP clients for current buffer (hard pause)' })
-
-    vim.api.nvim_create_user_command('LspHardResume', function()
-      hard_resume(vim.api.nvim_get_current_buf())
-    end, { desc = 'Restart LSP clients for current buffer (hard resume)' })
-
     vim.api.nvim_create_user_command('LspHealthSnapshot', function()
       local bufnr = vim.api.nvim_get_current_buf()
       local lines = {}
@@ -755,29 +684,46 @@ return {
     end, { desc = 'Show Python project root/env/interpreter info' })
 
     pcall(vim.api.nvim_del_user_command, 'PyrightRestart')
-    vim.api.nvim_create_user_command('PyrightRestart', function()
+    pcall(vim.api.nvim_del_user_command, 'LspHardPause')
+    pcall(vim.api.nvim_del_user_command, 'LspHardResume')
+    vim.api.nvim_create_user_command('LspLifecycleDebugToggle', function()
+      lifecycle.debug = not lifecycle.debug
+      vim.g.lsp_lifecycle_debug = lifecycle.debug
+      vim.notify(('LSP lifecycle debug: %s'):format(lifecycle.debug and 'on' or 'off'), vim.log.levels.INFO)
+    end, { desc = 'Toggle LSP lifecycle debug notifications' })
+    vim.api.nvim_create_user_command('LspLifecycleSnapshot', function()
       local bufnr = vim.api.nvim_get_current_buf()
-      for _, client in ipairs(vim.lsp.get_clients { bufnr = bufnr }) do
-        if client.name == 'pyright' or client.name == 'ruff' then
-          pcall(vim.lsp.stop_client, client.id)
-        end
+      local lines = {
+        ('buffer: %d'):format(bufnr),
+        ('filetype: %s'):format(vim.bo[bufnr].filetype),
+      }
+      local attached = vim.lsp.get_clients { bufnr = bufnr }
+      lines[#lines + 1] = ('attached now: %s'):format(#attached > 0 and table.concat(vim.tbl_map(function(c)
+        return c.name
+      end, attached), ', ') or 'none')
+      lines[#lines + 1] = 'attach counts:'
+      for name, count in pairs(lifecycle.attaches) do
+        lines[#lines + 1] = ('  %s=%d'):format(name, count)
       end
-      vim.defer_fn(function()
-        if vim.api.nvim_buf_is_valid(bufnr) then
-          ensure_python_servers(bufnr)
-        end
-      end, 50)
-    end, { desc = 'Restart pyright and ruff for current Python buffer' })
-
-    vim.api.nvim_create_autocmd('FileType', {
-      group = vim.api.nvim_create_augroup('custom-python-lsp-ensure', { clear = true }),
-      pattern = 'python',
+      lines[#lines + 1] = 'detach counts:'
+      for name, count in pairs(lifecycle.detaches) do
+        lines[#lines + 1] = ('  %s=%d'):format(name, count)
+      end
+      lines[#lines + 1] = 'recent lifecycle events:'
+      local start = math.max(1, #lifecycle.events - 9)
+      for i = start, #lifecycle.events do
+        local e = lifecycle.events[i]
+        lines[#lines + 1] = ('  %s %s buf=%d ft=%s client=%s'):format(e.time, e.kind, e.bufnr, e.ft, e.client)
+      end
+      vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
+    end, { desc = 'Show LSP lifecycle counters and recent events' })
+    vim.api.nvim_create_autocmd('LspDetach', {
+      group = vim.api.nvim_create_augroup('custom-lsp-lifecycle-detach-counter', { clear = true }),
       callback = function(ev)
-        vim.schedule(function()
-          if vim.api.nvim_buf_is_valid(ev.buf) then
-            ensure_python_servers(ev.buf)
-          end
-        end)
+        local client = ev.data and ev.data.client_id and vim.lsp.get_client_by_id(ev.data.client_id) or nil
+        local name = client and client.name or 'unknown'
+        lifecycle.detaches[name] = (lifecycle.detaches[name] or 0) + 1
+        lifecycle_event('detach', ev.buf, name)
       end,
     })
 
@@ -949,11 +895,26 @@ return {
       },
     }
 
-    local current = vim.api.nvim_get_current_buf()
-    if vim.bo[current].filetype == 'python' then
-      vim.schedule(function()
-        ensure_python_servers(current)
-      end)
-    end
+    vim.api.nvim_create_user_command('LspCapabilitiesSnapshot', function()
+      local lines = {}
+      for server_name, _ in pairs(servers) do
+        local cfg = (vim.lsp.config and vim.lsp.config[server_name]) or nil
+        local ci = cfg and cfg.capabilities
+          and cfg.capabilities.textDocument
+          and cfg.capabilities.textDocument.completion
+          and cfg.capabilities.textDocument.completion.completionItem
+          or nil
+        local snippet = ci and ci.snippetSupport == true
+        local resolve = ci and ci.resolveSupport and ci.resolveSupport.properties and #ci.resolveSupport.properties > 0
+        lines[#lines + 1] = ('%s | snippetSupport=%s | resolveSupport=%s'):format(
+          server_name,
+          snippet and 'ok' or 'missing',
+          resolve and 'ok' or 'missing'
+        )
+      end
+      table.sort(lines)
+      vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
+    end, { desc = 'Show configured LSP completion capabilities per server' })
+
   end,
 }
