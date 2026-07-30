@@ -19,6 +19,25 @@ return { -- Fuzzy Finder (files, lsp, etc)
 	},
 	config = function()
 		local actions = require 'telescope.actions'
+		local function secret_aware_find_command()
+			local script = [[
+rg --files --hidden --glob '!.git/*' | awk '
+{
+  if ($0 ~ /\.secret$/) {
+    base = substr($0, 1, length($0) - 7)
+    secret_only[base] = $0
+    next
+  }
+  regular[$0] = 1
+}
+END {
+  for (f in regular) print f
+  for (b in secret_only) if (!(b in regular)) print secret_only[b]
+}
+'
+]]
+			return { 'sh', '-c', script }
+		end
 
 		-- See `:help telescope` and `:help telescope.setup()`
 		require('telescope').setup {
@@ -47,7 +66,7 @@ return { -- Fuzzy Finder (files, lsp, etc)
 			},
 			pickers = {
 				find_files = {
-					find_command = { 'rg', '--files', '--hidden', '--glob', '!.git/*' },
+					find_command = secret_aware_find_command(),
 				},
 			},
 			extensions = {
@@ -98,7 +117,9 @@ return { -- Fuzzy Finder (files, lsp, etc)
 		vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
 		vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
 		vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
-		vim.keymap.set('n', '<c-o>', builtin.git_files, { desc = 'Search [O]pened Git Files' })
+		vim.keymap.set('n', '<c-o>', function()
+			require('custom.telescope.git').secret_aware_git_files()
+		end, { desc = 'Search [O]pened Git Files' })
 		vim.keymap.set('n', '<leader>sws', builtin.lsp_workspace_symbols, { desc = '[S]earch [W]orkspace [S]ymbols' })
 		vim.keymap.set('n', '<leader>sj', builtin.jumplist, { desc = '[S]earch [J]ump list' })
 
