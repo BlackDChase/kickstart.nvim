@@ -130,8 +130,8 @@ Numeber of times a particular action was refered back here is added as a counter
 ## Screen Play
 
 - Opening Split screen
-2 Open folder `<leader>vs`
-2 Open folder containg this file `<leader>vl`
+2 Open folder `-`
+2 Open folder containg this file `-`
 1 Open terminal vertical `<leader>tv`
 1 Open terminal below `<leader>tb`
 3 Check buffer `:ls`
@@ -176,4 +176,9 @@ Numeber of times a particular action was refered back here is added as a counter
 0 `<leader>td`, toggle_deleted
 0 `<leader>htb`, toggle_current_line_blame
 0 (mode `o` `x`), `ih`, select_hunk
+
+## Directory
+1 `-` Check Dir of the current file (opens oil drawer)
+1 `` ` `` Set dir of current file as pwd (inside Oil drawrer)
+1 `g~` Make it tab local (inside oil app drawer)
 
