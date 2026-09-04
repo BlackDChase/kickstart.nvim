@@ -119,13 +119,16 @@ do
     callback = function()
       pcall(function()
         local level = vim.g.custom_log_levels.lsp or vim.g.custom_log_level
-        if vim.lsp and vim.lsp.set_log_level then
-          vim.lsp.set_log_level(level)
-        elseif vim.lsp and vim.lsp.log and vim.lsp.log.set_level then
+        if vim.lsp and vim.lsp.log and vim.lsp.log.set_level then
           vim.lsp.log.set_level(level)
+        elseif vim.lsp and vim.lsp.set_log_level then
+          vim.lsp.set_log_level(level)
         end
       end)
       local ok, lsp_log = pcall(function()
+        if vim.lsp and vim.lsp.log and vim.lsp.log.get_filename then
+          return vim.lsp.log.get_filename()
+        end
         return vim.lsp and vim.lsp.get_log_path and vim.lsp.get_log_path() or nil
       end)
       if ok then

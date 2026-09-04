@@ -2,7 +2,23 @@
 return {
   -- Main LSP Configuration
   'neovim/nvim-lspconfig',
-  event = { 'BufReadPre', 'BufNewFile' },
+  event = 'User DeferredLsp',
+  init = function()
+    local function trigger_deferred_lsp()
+      vim.defer_fn(function()
+        vim.api.nvim_exec_autocmds('User', { pattern = 'DeferredLsp', modeline = false })
+      end, tonumber(vim.g.lsp_start_delay_ms) or 250)
+    end
+
+    if vim.v.vim_did_enter == 1 then
+      trigger_deferred_lsp()
+    else
+      vim.api.nvim_create_autocmd('VimEnter', {
+        once = true,
+        callback = trigger_deferred_lsp,
+      })
+    end
+  end,
   dependencies = {
     -- Automatically install LSPs and related tools to stdpath for Neovim
     -- Mason must be loaded before its dependents so we need to set it up here.

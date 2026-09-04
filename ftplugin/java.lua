@@ -651,12 +651,15 @@ local function normalize_jdk_path(path)
   end
   if vim.fn.isdirectory(expanded) == 1 then
     expanded = vim.fn.fnamemodify(expanded, ':p')
-    if has_java_bin(expanded) then
-      return expanded
-    end
+    -- Homebrew's `openjdk@*` prefix exposes a convenient `bin/java` symlink,
+    -- but Eclipse/JDTLS needs the actual macOS JDK bundle root. Prefer it
+    -- whenever it exists, before accepting a generic Java-home-shaped path.
     local brew_java_home = expanded .. '/libexec/openjdk.jdk/Contents/Home'
     if vim.fn.isdirectory(brew_java_home) == 1 and has_java_bin(brew_java_home) then
       return vim.fn.fnamemodify(brew_java_home, ':p')
+    end
+    if has_java_bin(expanded) then
+      return expanded
     end
   end
   if vim.fn.filereadable(expanded) == 1 then
@@ -954,7 +957,6 @@ local function bootstrap_root_state(state)
     }
     if has_lombok then
       jvm_args[#jvm_args + 1] = ('--jvm-arg=-javaagent:%s'):format(lombok_jar)
-      jvm_args[#jvm_args + 1] = ('--jvm-arg=-Xbootclasspath/a:%s'):format(lombok_jar)
     end
 
     local function add_jvm_arg(arg)
@@ -1136,12 +1138,32 @@ end
 
 root_state.pending_bufs[bufnr] = true
 
+local function bootstrap_after_first_paint(state)
+  local function defer_bootstrap()
+    vim.defer_fn(function()
+      if next(state.pending_bufs) ~= nil then
+        bootstrap_root_state(state)
+      else
+        state.bootstrap_scheduled = false
+      end
+    end, tonumber(vim.g.jdtls_start_delay_ms) or 500)
+  end
+
+  if vim.v.vim_did_enter == 1 then
+    defer_bootstrap()
+    return
+  end
+
+  api.nvim_create_autocmd('VimEnter', {
+    once = true,
+    callback = defer_bootstrap,
+  })
+end
+
 if not root_state.bootstrap_ready and not root_state.bootstrap_inflight and not root_state.bootstrap_scheduled then
   root_state.bootstrap_scheduled = true
   timed(sync_breakdown, 'schedule_attach', function()
-    vim.schedule(function()
-      bootstrap_root_state(root_state)
-    end)
+    bootstrap_after_first_paint(root_state)
   end)
 elseif root_state.bootstrap_ready then
   timed(sync_breakdown, 'schedule_attach', function()
