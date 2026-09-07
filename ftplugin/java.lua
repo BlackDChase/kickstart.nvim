@@ -16,7 +16,7 @@ end
 
 local bufnr = api.nvim_get_current_buf()
 local bufname = api.nvim_buf_get_name(bufnr)
-if bufname == '' then
+if bufname == '' or vim.b[bufnr].large_file_mode then
   return
 end
 
