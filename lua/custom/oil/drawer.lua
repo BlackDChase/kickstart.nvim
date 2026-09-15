@@ -49,14 +49,7 @@ local function open_path_in_target(path, open_mode)
     end
 
     vim.api.nvim_set_current_win(target)
-    if open_mode == 'vertical' then
-        vim.cmd('vsplit ' .. vim.fn.fnameescape(path))
-    elseif open_mode == 'horizontal' then
-        vim.cmd('split ' .. vim.fn.fnameescape(path))
-    else
-        vim.cmd('edit ' .. vim.fn.fnameescape(path))
-    end
-    return true
+    return require('custom.large_file').open(path, { mode = open_mode })
 end
 
 local function pick_open_mode(default_mode)

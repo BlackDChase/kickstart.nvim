@@ -1,7 +1,16 @@
 return {
 	'tpope/vim-fugitive',
-	-- Do not lazy load this
-	lazy = false,
+	cmd = { 'G', 'Git', 'GBrowse', 'GDelete', 'GMove', 'Gdiffsplit', 'Ggrep', 'Gread', 'Gvdiffsplit', 'Gwrite' },
+	keys = {
+		{ '<leader>gs', '<cmd>tab Git<cr>', desc = 'Open [G]it [S]tatus in a new tab' },
+		{ '<leader>gc', '<cmd>Git commit<cr>', desc = '[G]it [C]ommit' },
+		{ '<leader>gb', '<cmd>Git blame<cr>', desc = '[G]it [B]lame' },
+		{ '<leader>g1', '<cmd>diffget LO<cr>', desc = 'Get changes from [1] Local' },
+		{ '<leader>g2', '<cmd>diffget BA<cr>', desc = 'Get changes from [2] Base' },
+		{ '<leader>g3', '<cmd>diffget RE<cr>', desc = 'Get changes from [3] Remote' },
+		{ '<leader>gh', '<cmd>diffget //2<cr>', desc = 'Get changes from [h]eader/Base' },
+		{ '<leader>gl', '<cmd>diffget //3<cr>', desc = 'Get changes from [l]ocal/Remote' },
+	},
 	config = function ()
 
 		vim.keymap.set('n', '<leader>gs', ':tab Git <CR>', { desc = 'Open [G]it [S]tatus in a new tab' })

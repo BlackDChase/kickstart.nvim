@@ -47,12 +47,8 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 				path = vim.fn.expand '~' .. '/Documents/obsidian/sai/jazzx/secret/',
 			},
 			{
-				name = "personal",
-				path = vim.fn.expand '~' .. '/Documents/obsidian/MainVault',
-			},
-			{
-				name = "home",
-				path = vim.fn.expand '~' .. '/Documents/obsidian/HomePlan',
+				name = "mono-repo-vault",
+				path = vim.fn.expand '~' .. '/Documents/obsidian/',
 			}
 		}),
 
@@ -77,11 +73,20 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 		},
 
 		legacy_commands = false,
-		-- Optional, completion of wiki links, local markdown links, and tags using nvim-cmp.
+		file = {
+			ignore_filters = {
+				'**/.git/**',
+				'**/.tmp/**',
+				'**/.venv/**',
+				'**/__pycache__/**',
+				'**/build/**',
+				'**/dist/**',
+				'**/node_modules/**',
+				'**/target/**',
+			},
+		},
+		-- Completion of wiki links, local Markdown links, and tags via obsidian-ls.
 		completion = {
-			-- Set to false to disable completion.
-			blink = true,
-			nvim_cmp = false,
 			-- Trigger completion at 2 chars.
 			min_chars = 2,
 			match_case = true,
@@ -184,18 +189,17 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 		-- },
 	},
 	config = function(_, opts)
-		require("obsidian").setup(opts)
+		local function setup_obsidian()
+			require("obsidian").setup(opts)
 
-		local workspace_roots = {}
-		for _, ws in ipairs(opts.workspaces or {}) do
-			if ws.path then
-				workspace_roots[#workspace_roots + 1] = vim.fn.expand(ws.path)
+			local workspace_roots = {}
+			for _, ws in ipairs(opts.workspaces or {}) do
+				if ws.path then
+					workspace_roots[#workspace_roots + 1] = vim.fn.expand(ws.path)
+				end
 			end
-		end
 
-		vim.api.nvim_create_autocmd("FileType", {
-			pattern = "markdown",
-			callback = function(ev)
+			local function set_workspace_keymaps(ev)
 				local bufname = vim.api.nvim_buf_get_name(ev.buf)
 				for _, root in ipairs(workspace_roots) do
 					if vim.startswith(bufname, root) then
@@ -208,7 +212,45 @@ return { -- FOr Markdown Files, espeically Obsidian Notes
 						break
 					end
 				end
-			end,
-		})
+			end
+
+			local keymap_group = vim.api.nvim_create_augroup("custom-obsidian-keymaps", { clear = true })
+			vim.api.nvim_create_autocmd("FileType", {
+				group = keymap_group,
+				pattern = "markdown",
+				callback = set_workspace_keymaps,
+			})
+
+			-- setup() runs after the startup FileType/BufEnter events, so replay only
+			-- Obsidian's hooks for Markdown buffers that already exist.
+			for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+				local filetype = vim.bo[bufnr].filetype
+				if vim.api.nvim_buf_is_loaded(bufnr) and (filetype == "markdown" or filetype == "quarto") then
+					vim.api.nvim_exec_autocmds("FileType", {
+						buffer = bufnr,
+						group = "obsidian_setup",
+						modeline = false,
+					})
+					set_workspace_keymaps({ buf = bufnr })
+					if vim.fn.bufwinid(bufnr) ~= -1 then
+						vim.api.nvim_exec_autocmds("BufEnter", {
+							buffer = bufnr,
+							group = "obsidian_setup",
+							modeline = false,
+						})
+					end
+				end
+			end
+		end
+
+		local function defer_setup()
+			vim.defer_fn(setup_obsidian, tonumber(vim.g.obsidian_start_delay_ms) or 1300)
+		end
+
+		if vim.v.vim_did_enter == 1 then
+			defer_setup()
+		else
+			vim.api.nvim_create_autocmd("VimEnter", { once = true, callback = defer_setup })
+		end
 	end,
 }

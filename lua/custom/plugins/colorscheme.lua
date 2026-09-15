@@ -60,17 +60,26 @@ return { -- You can easily change to a different colorscheme.
             -- Setup function for full configuration control
             require('catppuccin').setup {
                 flavour = "mocha", -- Select the darkest theme variant (mocha, macchiato, frappe, latte)
+                auto_integrations = false,
+                compile_path = vim.fn.stdpath('data') .. '/catppuccin',
                 background = {
                     light = "latte",
                     dark = "mocha",
                 },
                 transparent_background = true, -- Set to false if you prefer a solid background
                 integrations = {
-                    -- Automatically integrate with common plugins (Treesitter, LSP, etc.)
+                    barbecue = false,
                     treesitter = true,
-                    lsp_trouble = true,
-                    cmp = true,
+                    blink_cmp = true,
+                    colorful_winsep = false,
+                    dropbar = false,
                     gitsigns = true,
+                    illuminate = false,
+                    indent_blankline = true,
+                    lir = false,
+                    mini = true,
+                    navic = false,
+                    telescope = true,
                 },
                 -- Optional: Customize the style of specific groups
                 styles = {

@@ -113,24 +113,31 @@ do
     pcall((vim.uv or vim.loop).fs_rename, path, backup)
   end
 
-  vim.api.nvim_create_autocmd({ 'BufReadPre', 'BufNewFile' }, {
+  local function configure_lsp_logging()
+    pcall(function()
+      local level = vim.g.custom_log_levels.lsp or vim.g.custom_log_level
+      if vim.lsp and vim.lsp.log and vim.lsp.log.set_level then
+        vim.lsp.log.set_level(level)
+      elseif vim.lsp and vim.lsp.set_log_level then
+        vim.lsp.set_log_level(level)
+      end
+    end)
+    local ok, lsp_log = pcall(function()
+      if vim.lsp and vim.lsp.log and vim.lsp.log.get_filename then
+        return vim.lsp.log.get_filename()
+      end
+      return vim.lsp and vim.lsp.get_log_path and vim.lsp.get_log_path() or nil
+    end)
+    if ok then
+      rotate_if_too_large(lsp_log, vim.g.custom_log_rotate_bytes)
+    end
+  end
+
+  vim.api.nvim_create_autocmd('VimEnter', {
     group = vim.api.nvim_create_augroup('custom-lsp-logging', { clear = true }),
     once = true,
     callback = function()
-      pcall(function()
-        local level = vim.g.custom_log_levels.lsp or vim.g.custom_log_level
-        if vim.lsp and vim.lsp.set_log_level then
-          vim.lsp.set_log_level(level)
-        elseif vim.lsp and vim.lsp.log and vim.lsp.log.set_level then
-          vim.lsp.log.set_level(level)
-        end
-      end)
-      local ok, lsp_log = pcall(function()
-        return vim.lsp and vim.lsp.get_log_path and vim.lsp.get_log_path() or nil
-      end)
-      if ok then
-        rotate_if_too_large(lsp_log, vim.g.custom_log_rotate_bytes)
-      end
+      vim.defer_fn(configure_lsp_logging, tonumber(vim.g.lsp_logging_delay_ms) or 1200)
     end,
   })
 end
@@ -146,6 +153,45 @@ do
       local elapsed_ms = ((vim.uv or vim.loop).hrtime() - start_ns) / 1e6
       if elapsed_ms >= threshold_ms then
         vim.notify(string.format('nvim startup: %.1fms', elapsed_ms), vim.log.levels.WARN)
+      end
+    end,
+  })
+end
+
+-- Stagger automatic plugin work so the first screen renders before optional UI
+-- features initialize, without creating one large VeryLazy main-thread burst.
+do
+  local deferred_events = {
+    { name = 'DeferredVisuals', delay = 650, skip_expensive = true },
+    { name = 'DeferredUiTools', delay = 1600 },
+  }
+
+  local function execute_deferred(event, bufnr)
+    if event.skip_expensive and require('custom.large_file').is_expensive_buffer(bufnr) then
+      return
+    end
+    vim.api.nvim_exec_autocmds('User', { pattern = event.name, modeline = false })
+  end
+
+  vim.api.nvim_create_autocmd('VimEnter', {
+    group = vim.api.nvim_create_augroup('custom-deferred-ui', { clear = true }),
+    once = true,
+    callback = function()
+      for _, event in ipairs(deferred_events) do
+        vim.defer_fn(function()
+          execute_deferred(event, vim.api.nvim_get_current_buf())
+        end, event.delay)
+      end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd('BufWinEnter', {
+    group = 'custom-deferred-ui',
+    callback = function(args)
+      if vim.v.vim_did_enter == 1 then
+        vim.defer_fn(function()
+          execute_deferred(deferred_events[1], args.buf)
+        end, 80)
       end
     end,
   })

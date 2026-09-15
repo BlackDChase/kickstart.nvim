@@ -10,6 +10,7 @@ More cool stuff: https://github.com/tjdevries/advent-of-nvim/
 require 'custom.configs' -- Also sets: leader
 require 'custom.mappings'
 require 'custom.autocommands'
+require('custom.large_file').setup()
 
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
@@ -50,6 +51,8 @@ require('lazy').setup({
   -- In normal mode type `<space>sh` then write `lazy.nvim-plugin`
   -- you can continue same window with `<space>sr` which resumes last telescope search
 }, {
+  pkg = { enabled = false },
+  rocks = { enabled = false },
   ui = {
     -- If you are using a Nerd Font: set icons to an empty table which will use the
     -- default lazy.nvim defined Nerd Font icons, otherwise define a unicode icons table

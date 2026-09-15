@@ -2,7 +2,7 @@ return {
 
   { -- Linting
     'mfussenegger/nvim-lint',
-    event = { 'BufReadPre', 'BufNewFile' },
+    event = 'User DeferredUiTools',
     config = function()
       local lint = require 'lint'
       lint.linters_by_ft = {
@@ -41,20 +41,43 @@ return {
       -- lint.linters_by_ft['terraform'] = nil
       -- lint.linters_by_ft['text'] = nil
 
-      -- Create autocommand which carries out the actual linting
-      -- on the specified events.
+      local function lint_markdown(bufnr)
+        if not vim.api.nvim_buf_is_valid(bufnr) or not vim.api.nvim_buf_is_loaded(bufnr) then
+          return
+        end
+
+        if vim.bo[bufnr].filetype ~= 'markdown'
+            or vim.bo[bufnr].buftype ~= ''
+            or not vim.bo[bufnr].modifiable
+            or vim.b[bufnr].large_file_mode
+            or vim.fn.executable('markdownlint-cli2') ~= 1 then
+          return
+        end
+
+        lint.try_lint('markdownlint-cli2')
+      end
+
       local lint_augroup = vim.api.nvim_create_augroup('lint', { clear = true })
-      vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWritePost', 'InsertLeave' }, {
+      vim.api.nvim_create_autocmd('FileType', {
         group = lint_augroup,
-        callback = function()
-          -- Only run the linter in buffers that you can modify in order to
-          -- avoid superfluous noise, notably within the handy LSP pop-ups that
-          -- describe the hovered symbol using Markdown.
-          if vim.bo.modifiable then
-            lint.try_lint()
-          end
+        pattern = 'markdown',
+        callback = function(ev)
+          vim.schedule(function()
+            lint_markdown(ev.buf)
+          end)
         end,
       })
+      vim.api.nvim_create_autocmd({ 'BufWritePost', 'InsertLeave' }, {
+        group = lint_augroup,
+        callback = function(ev)
+          lint_markdown(ev.buf)
+        end,
+      })
+
+      local current_buf = vim.api.nvim_get_current_buf()
+      vim.defer_fn(function()
+        lint_markdown(current_buf)
+      end, 100)
     end,
   },
 }

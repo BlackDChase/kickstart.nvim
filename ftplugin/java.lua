@@ -16,7 +16,7 @@ end
 
 local bufnr = api.nvim_get_current_buf()
 local bufname = api.nvim_buf_get_name(bufnr)
-if bufname == '' then
+if bufname == '' or vim.b[bufnr].large_file_mode then
   return
 end
 
@@ -651,12 +651,15 @@ local function normalize_jdk_path(path)
   end
   if vim.fn.isdirectory(expanded) == 1 then
     expanded = vim.fn.fnamemodify(expanded, ':p')
-    if has_java_bin(expanded) then
-      return expanded
-    end
+    -- Homebrew's `openjdk@*` prefix exposes a convenient `bin/java` symlink,
+    -- but Eclipse/JDTLS needs the actual macOS JDK bundle root. Prefer it
+    -- whenever it exists, before accepting a generic Java-home-shaped path.
     local brew_java_home = expanded .. '/libexec/openjdk.jdk/Contents/Home'
     if vim.fn.isdirectory(brew_java_home) == 1 and has_java_bin(brew_java_home) then
       return vim.fn.fnamemodify(brew_java_home, ':p')
+    end
+    if has_java_bin(expanded) then
+      return expanded
     end
   end
   if vim.fn.filereadable(expanded) == 1 then
@@ -731,24 +734,9 @@ local function get_package_path(name)
     return cached or nil
   end
 
-  local ok_registry, registry = pcall(require, 'mason-registry')
-  local ok_install, install_location = pcall(function()
-    return require('mason-core.installer.InstallLocation').global()
-  end)
-  local ok_fs, fs = pcall(require, 'mason-core.fs')
-  if not ok_registry or not ok_install or not ok_fs then
-    cache.package_paths[name] = false
-    return nil
-  end
-
-  local ok_pkg, package = pcall(registry.get_package, name)
-  if not ok_pkg then
-    cache.package_paths[name] = false
-    return nil
-  end
-
-  local package_path = install_location:package(package.name)
-  if not fs.sync.dir_exists(package_path) then
+  local package_path = vim.fn.stdpath 'data' .. '/mason/packages/' .. name
+  local package_stat = uv.fs_stat(package_path)
+  if not package_stat or package_stat.type ~= 'directory' then
     cache.package_paths[name] = false
     return nil
   end
@@ -954,7 +942,6 @@ local function bootstrap_root_state(state)
     }
     if has_lombok then
       jvm_args[#jvm_args + 1] = ('--jvm-arg=-javaagent:%s'):format(lombok_jar)
-      jvm_args[#jvm_args + 1] = ('--jvm-arg=-Xbootclasspath/a:%s'):format(lombok_jar)
     end
 
     local function add_jvm_arg(arg)
@@ -984,11 +971,7 @@ local function bootstrap_root_state(state)
     vim.list_extend(cmd, jvm_args)
     vim.list_extend(cmd, { '-data', state.workspace_dir })
 
-    local capabilities = {}
-    local ok_blink, blink = pcall(require, 'blink.cmp')
-    if ok_blink then
-      capabilities = blink.get_lsp_capabilities()
-    end
+    local capabilities = require('custom.lsp_capabilities').get()
 
     local large_project_roots = vim.g.lsp_large_project_roots or {}
     local debounce_default = tonumber(vim.g.lsp_debounce_ms) or 150
@@ -1136,12 +1119,32 @@ end
 
 root_state.pending_bufs[bufnr] = true
 
+local function bootstrap_after_first_paint(state)
+  local function start_bootstrap()
+    vim.schedule(function()
+      if next(state.pending_bufs) ~= nil then
+        bootstrap_root_state(state)
+      else
+        state.bootstrap_scheduled = false
+      end
+    end)
+  end
+
+  if vim.v.vim_did_enter == 1 then
+    start_bootstrap()
+    return
+  end
+
+  api.nvim_create_autocmd('VimEnter', {
+    once = true,
+    callback = start_bootstrap,
+  })
+end
+
 if not root_state.bootstrap_ready and not root_state.bootstrap_inflight and not root_state.bootstrap_scheduled then
   root_state.bootstrap_scheduled = true
   timed(sync_breakdown, 'schedule_attach', function()
-    vim.schedule(function()
-      bootstrap_root_state(root_state)
-    end)
+    bootstrap_after_first_paint(root_state)
   end)
 elseif root_state.bootstrap_ready then
   timed(sync_breakdown, 'schedule_attach', function()

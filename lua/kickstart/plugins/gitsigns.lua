@@ -5,22 +5,49 @@
 return {
 	{
 		'lewis6991/gitsigns.nvim',
-		event = { 'BufReadPre', 'BufNewFile' },
-		config = function()
-			require('gitsigns').setup {
-				signs = {
-					add          = { text = '+' },
-					change       = { text = '~' },
-					delete       = { text = '_' },
-					topdelete    = { text = '‾' },
-					changedelete = { text = '|' },
-					untracked    = { text = '┆' },
-				},
+		event = 'BufWritePost',
+		cmd = 'Gitsigns',
+		keys = {
+			{ ']c', function()
+				if vim.wo.diff then vim.cmd.normal { ']c', bang = true } else require('gitsigns').nav_hunk 'next' end
+			end, desc = 'Jump to next git [c]hange' },
+			{ '[c', function()
+				if vim.wo.diff then vim.cmd.normal { '[c', bang = true } else require('gitsigns').nav_hunk 'prev' end
+			end, desc = 'Jump to previous git [c]hange' },
+			{ '<leader>hs', function() require('gitsigns').stage_hunk() end, desc = 'git [s]tage hunk' },
+			{ '<leader>hs', function() require('gitsigns').stage_hunk { vim.fn.line '.', vim.fn.line 'v' } end, mode = 'v', desc = 'git [s]tage hunk' },
+			{ '<leader>hr', function() require('gitsigns').reset_hunk() end, desc = 'git [r]eset hunk' },
+			{ '<leader>hr', function() require('gitsigns').reset_hunk { vim.fn.line '.', vim.fn.line 'v' } end, mode = 'v', desc = 'git [r]eset hunk' },
+			{ '<leader>hbs', function() require('gitsigns').stage_buffer() end, desc = '[B]uffer - git [S]tage' },
+			{ '<leader>hbr', function() require('gitsigns').reset_buffer() end, desc = 'buffer git [R]eset' },
+			{ '<leader>hu', function() require('gitsigns').stage_hunk() end, desc = 'git [u]ndo stage hunk' },
+			{ '<leader>hp', function() require('gitsigns').preview_hunk() end, desc = 'git [p]review hunk' },
+			{ '<leader>hfb', function() require('gitsigns').blame_line { full = true } end, desc = 'git [f]ull [b]lame' },
+			{ '<leader>hb', function() require('gitsigns').blame_line() end, desc = 'git [b]lame line' },
+			{ '<leader>hd', function() require('gitsigns').diffthis() end, desc = 'git [d]iff against index' },
+			{ '<leader>hdc', function() require('gitsigns').diffthis '@' end, desc = 'git [D]iff against last [c]ommit' },
+			{ '<leader>htb', function() require('gitsigns').toggle_current_line_blame() end, desc = '[T]oggle git show [b]lame line' },
+			{ '<leader>htD', function() require('gitsigns').preview_hunk_inline() end, desc = '[T]oggle git show [D]eleted' },
+			{ 'hs', '<cmd>Gitsigns select_hunk<cr>', mode = { 'o', 'x' }, desc = '[H]unk [S]elect' },
+		},
+		config = function(_, opts)
+			opts.signs = {
+				add          = { text = '+' },
+				change       = { text = '~' },
+				delete       = { text = '_' },
+				topdelete    = { text = '‾' },
+				changedelete = { text = '|' },
+				untracked    = { text = '┆' },
 			}
+			require('gitsigns').setup(opts)
 		end,
 
 		opts = {
 			on_attach = function(bufnr)
+				if vim.b[bufnr].large_file_mode then
+					return false
+				end
+
 				local gitsigns = require 'gitsigns'
 
 				local function map(mode, l, r, opts)

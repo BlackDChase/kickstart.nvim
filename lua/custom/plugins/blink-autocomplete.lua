@@ -32,19 +32,6 @@ return { -- Autocompletion
 			opts = {},
 		},
 		{
-			"hrsh7th/nvim-cmp",
-			-- load cmp on InsertEnter
-			event = "InsertEnter",
-			-- these dependencies will only be loaded when cmp loads
-			-- dependencies are always lazy-loaded unless specified otherwise
-			dependencies = {
-				"hrsh7th/cmp-nvim-lsp",
-				"hrsh7th/cmp-buffer",
-				'hrsh7th/vim-vsnip',
-				'hrsh7th/vim-vsnip-integ',
-			},
-		},
-		{
 			-- `lazydev` configures Lua LSP for your Neovim config, runtime and plugins
 			-- used for completion, annotations and signatures of Neovim apis
 			'folke/lazydev.nvim',

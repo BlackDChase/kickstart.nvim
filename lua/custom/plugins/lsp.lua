@@ -2,41 +2,144 @@
 return {
   -- Main LSP Configuration
   'neovim/nvim-lspconfig',
-  event = { 'BufReadPre', 'BufNewFile' },
-  dependencies = {
-    -- Automatically install LSPs and related tools to stdpath for Neovim
-    -- Mason must be loaded before its dependents so we need to set it up here.
-    -- NOTE: `opts = {}` is the same as calling `require('mason').setup({})`
-    { 'mason-org/mason.nvim', opts = { log_level = vim.g.custom_log_levels.mason or vim.g.custom_log_level } },
-    'mason-org/mason-lspconfig.nvim',
-    'WhoIsSethDaniel/mason-tool-installer.nvim',
+  event = 'User LspRuntimeReady',
+  cmd = { 'LspInfo', 'LspStart', 'LspStop', 'LspRestart', 'LspLog' },
+  init = function()
+    local supported_filetypes = {
+      bib = true,
+      dockerfile = true,
+      go = true,
+      java = true,
+      javascript = true,
+      javascriptreact = true,
+      lua = true,
+      markdown = true,
+      python = true,
+      tex = true,
+      typescript = true,
+      typescriptreact = true,
+      vim = true,
+    }
+    local scheduled = false
+    local loaded = false
 
-    -- Useful status updates for LSP.
-    {
-      'j-hui/fidget.nvim',
-      opts = {
-        logger = {
-          level = vim.g.custom_log_levels.fidget or vim.g.custom_log_level,
-          max_size = 1024, -- KB
-        },
-      },
-    },
+    local function start_lsp_runtime(bufnr)
+      if scheduled or loaded or not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+      local filetype = vim.bo[bufnr].filetype
+      if not supported_filetypes[filetype] or require('custom.large_file').is_expensive_buffer(bufnr) then
+        return
+      end
+      scheduled = true
+      vim.schedule(function()
+        scheduled = false
+        if vim.api.nvim_buf_is_valid(bufnr)
+          and supported_filetypes[vim.bo[bufnr].filetype]
+          and not require('custom.large_file').is_expensive_buffer(bufnr)
+        then
+          loaded = true
+          vim.api.nvim_exec_autocmds('User', { pattern = 'LspRuntimeReady', modeline = false })
+        end
+      end)
+    end
 
-    -- Allows extra capabilities provided by blink.cmp
-    'saghen/blink.cmp',
-  },
+    if vim.v.vim_did_enter == 1 then
+      local bufnr = vim.api.nvim_get_current_buf()
+      start_lsp_runtime(bufnr)
+    else
+      vim.api.nvim_create_autocmd('VimEnter', {
+        once = true,
+        callback = function()
+          local bufnr = vim.api.nvim_get_current_buf()
+          start_lsp_runtime(bufnr)
+        end,
+      })
+    end
+    vim.api.nvim_create_autocmd('FileType', {
+      callback = function(args)
+        if vim.v.vim_did_enter == 1 then
+          start_lsp_runtime(args.buf)
+        end
+      end,
+    })
+  end,
   config = function()
+    local uv = vim.uv or vim.loop
+    local mason_bin = vim.fn.stdpath 'data' .. '/mason/bin'
+    if uv.fs_stat(mason_bin) and not vim.tbl_contains(vim.split(vim.env.PATH or '', ':', { plain = true }), mason_bin) then
+      vim.env.PATH = mason_bin .. ':' .. (vim.env.PATH or '')
+    end
+
     local lsp_attach_start_ns_by_buf = {} ---@type table<integer, integer>
     local lsp_attach_ms_by_buf = {} ---@type table<integer, number>
     local first_paint_ms_by_buf = {} ---@type table<integer, number>
     local lsp_attach_counts = vim.g.lsp_attach_counts or {}
+    local startup_profile = vim.g.lsp_startup_profile or 'fast'
     local lifecycle = {
       attaches = {},
       detaches = {},
       events = {},
       debug = vim.g.lsp_lifecycle_debug == true,
     }
+    local timing = {
+      events = {}, ---@type table[]
+      open_start_ns_by_buf = {}, ---@type table<integer, integer>
+      first_diag_logged = {}, ---@type table<integer, boolean>
+    }
+    local timing_log_path = vim.fn.stdpath 'state' .. '/lsp-startup.jsonl'
     vim.g.lsp_attach_counts = lsp_attach_counts
+
+    local function now_ms(start_ns)
+      return (uv.hrtime() - start_ns) / 1e6
+    end
+
+    local function append_timing_log(event)
+      local ok_encode, payload = pcall(vim.json.encode, event)
+      if not ok_encode or not payload then
+        return
+      end
+      pcall(vim.fn.mkdir, vim.fn.fnamemodify(timing_log_path, ':h'), 'p')
+      pcall(vim.fn.writefile, { payload }, timing_log_path, 'a')
+    end
+
+    local function record_timing(event)
+      timing.events[#timing.events + 1] = event
+      if #timing.events > 500 then
+        table.remove(timing.events, 1)
+      end
+      append_timing_log(event)
+      if lifecycle.debug then
+        vim.notify(
+          ('LSP timing %s phase=%s %.1fms'):format(event.client or 'n/a', event.phase, event.duration_ms or -1),
+          vim.log.levels.INFO
+        )
+      end
+    end
+
+    local function log_phase(bufnr, client, phase, start_ns, extra)
+      local event = vim.tbl_extend('force', {
+        ts = os.date '%Y-%m-%d %H:%M:%S',
+        bufnr = bufnr,
+        file = vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_get_name(bufnr) or '',
+        ft = vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].filetype or 'n/a',
+        client = client or 'n/a',
+        phase = phase,
+        duration_ms = start_ns and now_ms(start_ns) or 0,
+        startup_profile = startup_profile,
+        success = true,
+      }, extra or {})
+      record_timing(event)
+    end
+
+    local function percentile(values, p)
+      if #values == 0 then
+        return nil
+      end
+      table.sort(values)
+      local idx = math.max(1, math.min(#values, math.floor((p / 100) * #values + 0.5)))
+      return values[idx]
+    end
 
     local format_disable = vim.g.lsp_format_disable or {}
     if vim.islist(format_disable) then
@@ -179,7 +282,9 @@ return {
     vim.api.nvim_create_autocmd({ 'BufReadPre', 'BufNewFile' }, {
       group = vim.api.nvim_create_augroup('custom-lsp-timing', { clear = true }),
       callback = function(ev)
-        lsp_attach_start_ns_by_buf[ev.buf] = (vim.uv or vim.loop).hrtime()
+        local start_ns = uv.hrtime()
+        lsp_attach_start_ns_by_buf[ev.buf] = start_ns
+        timing.open_start_ns_by_buf[ev.buf] = start_ns
       end,
     })
     vim.api.nvim_create_autocmd('BufWinEnter', {
@@ -192,13 +297,35 @@ return {
         if not start_ns then
           return
         end
-        local elapsed_ms = ((vim.uv or vim.loop).hrtime() - start_ns) / 1e6
+        local elapsed_ms = (uv.hrtime() - start_ns) / 1e6
         first_paint_ms_by_buf[ev.buf] = elapsed_ms
         vim.b[ev.buf].first_paint_ms = elapsed_ms
+        local open_ns = timing.open_start_ns_by_buf[ev.buf]
+        if open_ns then
+          log_phase(ev.buf, 'editor', 'buffer_open_to_editable', open_ns)
+          timing.open_start_ns_by_buf[ev.buf] = nil
+        end
       end,
     })
 
-    local uv = vim.uv or vim.loop
+    vim.api.nvim_create_autocmd('DiagnosticChanged', {
+      group = vim.api.nvim_create_augroup('custom-lsp-first-diagnostics-timing', { clear = true }),
+      callback = function(ev)
+        local bufnr = ev.buf
+        if timing.first_diag_logged[bufnr] then
+          return
+        end
+        local start_ns = lsp_attach_start_ns_by_buf[bufnr]
+        if not start_ns then
+          return
+        end
+        timing.first_diag_logged[bufnr] = true
+        log_phase(bufnr, 'diagnostics', 'first_diagnostics', start_ns, {
+          item_count = ev.data and ev.data.diagnostics and #ev.data.diagnostics or 0,
+        })
+      end,
+    })
+
     local python_root_markers = {
       'pyproject.toml',
       'poetry.lock',
@@ -291,7 +418,7 @@ return {
       end
 
       local resolved = nil
-      if vim.fn.executable 'poetry' == 1 then
+      if startup_profile ~= 'fast' and vim.fn.executable 'poetry' == 1 then
         local ok, out = pcall(vim.fn.system, { 'poetry', '-C', root_dir, 'env', 'info', '-p' })
         if ok then
           out = vim.fn.trim(out or '')
@@ -328,6 +455,57 @@ return {
         return python_bin
       end
       return nil
+    end
+
+    local python_enrichment_inflight = {} ---@type table<string, boolean>
+    local function enrich_python_settings_async(client, bufnr)
+      if startup_profile ~= 'fast' then
+        return
+      end
+      local root = client and client.config and client.config.root_dir
+      if not root or root == '' or python_enrichment_inflight[root] then
+        return
+      end
+      if vim.fn.executable 'poetry' ~= 1 then
+        return
+      end
+
+      python_enrichment_inflight[root] = true
+      local start_ns = uv.hrtime()
+      vim.system({ 'poetry', '-C', root, 'env', 'info', '-p' }, { text = true }, function(obj)
+        vim.schedule(function()
+          python_enrichment_inflight[root] = nil
+          if not obj or obj.code ~= 0 then
+            log_phase(bufnr, client.name, 'python_env_enrichment', start_ns, {
+              success = false,
+              error = 'poetry_env_info_failed',
+            })
+            return
+          end
+
+          local venv = vim.trim(obj.stdout or '')
+          if venv == '' or not path_is_dir(venv) then
+            log_phase(bufnr, client.name, 'python_env_enrichment', start_ns, {
+              success = false,
+              error = 'poetry_env_empty_or_missing',
+            })
+            return
+          end
+          poetry_env_cache[root] = venv
+          local python = resolve_python_interpreter(venv)
+          local settings = {
+            python = {
+              venvPath = vim.fn.fnamemodify(venv, ':h'),
+              venv = vim.fn.fnamemodify(venv, ':t'),
+            },
+          }
+          if python then
+            settings.python.pythonPath = python
+          end
+          pcall(client.notify, client, 'workspace/didChangeConfiguration', { settings = settings })
+          log_phase(bufnr, client.name, 'python_env_enrichment', start_ns, { success = true })
+        end)
+      end)
     end
 
     local function python_root_dir(arg1, arg2)
@@ -425,11 +603,12 @@ return {
           end, event.buf)
         end
 
+        local attach_start_ns = lsp_attach_start_ns_by_buf[event.buf]
         do
           local threshold_ms = tonumber(vim.g.lsp_attach_slow_ms) or 400
-          local start_ns = lsp_attach_start_ns_by_buf[event.buf]
+          local start_ns = attach_start_ns
           if start_ns then
-            local elapsed_ms = ((vim.uv or vim.loop).hrtime() - start_ns) / 1e6
+            local elapsed_ms = (uv.hrtime() - start_ns) / 1e6
             if elapsed_ms >= threshold_ms then
               vim.notify(string.format('LSP attach: %.0fms', elapsed_ms), vim.log.levels.WARN)
             end
@@ -479,8 +658,14 @@ return {
         -- or a suggestion from your LSP for this to activate.
         map('<localleader>a', vim.lsp.buf.code_action, 'Goto Code [A]ction', { 'n', 'x' })
 
+        local function telescope_lsp(method)
+          return function()
+            require('telescope.builtin')[method]()
+          end
+        end
+
         -- Find references for the word under your cursor.
-        map('<localleader>r', require('telescope.builtin').lsp_references, 'Goto [R]e[f]erences')
+        map('<localleader>r', telescope_lsp('lsp_references'), 'Goto [R]e[f]erences')
 
         -- Show documentation for the word under your cursor.
         map('<localleader>h', vim.lsp.buf.hover, '[H]over Documentation')
@@ -493,7 +678,7 @@ return {
 
         -- Jump to the implementation of the word under your cursor.
         --  Useful when your language has ways of declaring types without an actual implementation.
-        map('<localleader>i', require('telescope.builtin').lsp_implementations, 'Goto [I]mplementation')
+        map('<localleader>i', telescope_lsp('lsp_implementations'), 'Goto [I]mplementation')
 
         -- Jump to the definition of the word under your cursor.
         --  This is where a variable was first declared, or where a function is defined, etc.
@@ -501,7 +686,7 @@ return {
         if vim.bo[event.buf].filetype == 'python' then
           map('<localleader>d', python_definition, 'Goto [D]efinition')
         else
-          map('<localleader>d', require('telescope.builtin').lsp_definitions, 'Goto [D]efinition')
+          map('<localleader>d', telescope_lsp('lsp_definitions'), 'Goto [D]efinition')
         end
 
         -- WARN: This is not Goto Definition, this is Goto Declaration.
@@ -510,16 +695,16 @@ return {
 
         -- Fuzzy find all the symbols in your current document.
         --  Symbols are things like variables, functions, types, etc.
-        map('<localleader>o', require('telescope.builtin').lsp_document_symbols, '[O]pen Document Symbols')
+        map('<localleader>o', telescope_lsp('lsp_document_symbols'), '[O]pen Document Symbols')
 
         -- Fuzzy find all the symbols in your current workspace.
         --  Similar to document symbols, except searches over your entire project.
-        map('<localleader>w', require('telescope.builtin').lsp_dynamic_workspace_symbols, 'Open [W]orkspace Symbols')
+        map('<localleader>w', telescope_lsp('lsp_dynamic_workspace_symbols'), 'Open [W]orkspace Symbols')
 
         -- Jump to the type of the word under your cursor.
         --  Useful when you're not sure what type a variable is and you want to see
         --  the definition of its *type*, not where it was *defined*.
-        map('<localleader>t', require('telescope.builtin').lsp_type_definitions, 'Goto [T]ype Definition')
+        map('<localleader>t', telescope_lsp('lsp_type_definitions'), 'Goto [T]ype Definition')
         map('<localleader>Wa', vim.lsp.buf.add_workspace_folder, 'Add [W]orkspace Folder')
         map('<localleader>Wr', vim.lsp.buf.remove_workspace_folder, 'Remove [W]orkspace Folder')
         map('<localleader>Wl', function()
@@ -530,6 +715,27 @@ return {
         if client then
           lifecycle.attaches[client.name] = (lifecycle.attaches[client.name] or 0) + 1
           lifecycle_event('attach', event.buf, client.name)
+          log_phase(event.buf, client.name, 'lsp_attach', attach_start_ns)
+        end
+        vim.b[event.buf].lsp_feature_ready_tier1 = true
+        vim.b[event.buf].lsp_feature_ready_tier2 = false
+        if client and client.name == 'pyright' then
+          enrich_python_settings_async(client, event.buf)
+          vim.defer_fn(function()
+            if vim.api.nvim_buf_is_valid(event.buf) then
+              vim.b[event.buf].lsp_feature_ready_tier2 = true
+            end
+          end, 1200)
+        elseif client and client.name == 'jdtls' then
+          local java_phase_ns = uv.hrtime()
+          vim.defer_fn(function()
+            if vim.api.nvim_buf_is_valid(event.buf) then
+              vim.b[event.buf].lsp_feature_ready_tier2 = true
+              log_phase(event.buf, client.name, 'java_deferred_extras', java_phase_ns)
+            end
+          end, 1200)
+        else
+          vim.b[event.buf].lsp_feature_ready_tier2 = true
         end
 
         if client and client_supports_method(client, vim.lsp.protocol.Methods.textDocument_incomingCalls, event.buf) then
@@ -656,6 +862,67 @@ return {
       vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
     end, { desc = 'Show LSP clients + last attach timing' })
 
+    vim.api.nvim_create_user_command('LspTimingSnapshot', function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      local lines = {
+        ('buffer: %d'):format(bufnr),
+        ('file: %s'):format(vim.api.nvim_buf_get_name(bufnr)),
+        ('filetype: %s'):format(vim.bo[bufnr].filetype),
+        ('feature tier1 ready: %s'):format(tostring(vim.b[bufnr].lsp_feature_ready_tier1 == true)),
+        ('feature tier2 ready: %s'):format(tostring(vim.b[bufnr].lsp_feature_ready_tier2 == true)),
+      }
+      local attached = vim.lsp.get_clients { bufnr = bufnr }
+      lines[#lines + 1] = ('attached clients: %s'):format(#attached > 0 and table.concat(vim.tbl_map(function(c)
+        return c.name
+      end, attached), ', ') or 'none')
+
+      lines[#lines + 1] = 'recent timing phases:'
+      local count = 0
+      for i = #timing.events, 1, -1 do
+        local e = timing.events[i]
+        if e.bufnr == bufnr then
+          lines[#lines + 1] = ('  %s | %s | %s | %.1fms | ok=%s'):format(e.ts, e.client, e.phase, e.duration_ms, tostring(e.success))
+          count = count + 1
+          if count >= 12 then
+            break
+          end
+        end
+      end
+      vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
+    end, { desc = 'Show timing phases and feature-ready state for current buffer' })
+
+    vim.api.nvim_create_user_command('LspTimingReport', function()
+      local groups = {} ---@type table<string, number[]>
+      for _, e in ipairs(timing.events) do
+        local key = table.concat({ e.ft or 'n/a', e.client or 'n/a', e.phase or 'n/a' }, ' | ')
+        groups[key] = groups[key] or {}
+        groups[key][#groups[key] + 1] = tonumber(e.duration_ms) or 0
+      end
+      local lines = {}
+      for key, vals in pairs(groups) do
+        local sum = 0
+        for _, v in ipairs(vals) do
+          sum = sum + v
+        end
+        local avg = (#vals > 0) and (sum / #vals) or 0
+        local p50 = percentile(vim.deepcopy(vals), 50) or 0
+        local p95 = percentile(vim.deepcopy(vals), 95) or 0
+        lines[#lines + 1] = ('%s | n=%d avg=%.1fms p50=%.1fms p95=%.1fms'):format(key, #vals, avg, p50, p95)
+      end
+      table.sort(lines)
+      if #lines == 0 then
+        lines = { 'No LSP timing events recorded yet.' }
+      end
+      vim.notify(table.concat(lines, '\n'), vim.log.levels.INFO)
+    end, { desc = 'Show aggregated p50/p95 timings by filetype/client/phase' })
+
+    vim.api.nvim_create_user_command('LspTimingReset', function()
+      timing.events = {}
+      timing.open_start_ns_by_buf = {}
+      timing.first_diag_logged = {}
+      vim.notify('LSP timing events reset', vim.log.levels.INFO)
+    end, { desc = 'Reset in-memory LSP timing events' })
+
     pcall(vim.api.nvim_del_user_command, 'PyrightProjectInfo')
     vim.api.nvim_create_user_command('PyrightProjectInfo', function()
       local current_buf = vim.api.nvim_get_current_buf()
@@ -760,7 +1027,7 @@ return {
     --  By default, Neovim doesn't support everything that is in the LSP specification.
     --  When you add blink.cmp, luasnip, etc. Neovim now has *more* capabilities.
     --  So, we create new capabilities with blink.cmp, and then broadcast that to the servers.
-    local capabilities = require('blink.cmp').get_lsp_capabilities()
+    local capabilities = require('custom.lsp_capabilities').get()
 
     -- Enable the following language servers
     --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
@@ -808,6 +1075,11 @@ return {
       ruff = {
         root_dir = python_root_dir,
       },
+      gopls = {},
+      marksman = {},
+      texlab = {},
+      vimls = {},
+      dockerls = {},
       -- rust_analyzer = {},
       -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
       --
@@ -834,38 +1106,6 @@ return {
       },
     }
 
-    -- Ensure the servers and tools above are installed
-    --
-    -- To check the current status of installed tools and/or manually install
-    -- other tools, you can run
-    --    :Mason
-    --
-    -- You can press `g?` for help in this menu.
-    --
-    -- `mason` had to be setup earlier: to configure its options see the
-    -- `dependencies` table for `nvim-lspconfig` above.
-    --
-    -- You can add other tools here that you want Mason to install
-    -- for you, so that they are available from within Neovim.
-    local ensure_installed = vim.tbl_keys(servers or {})
-    vim.list_extend(ensure_installed, {
-      'stylua', -- Used to format Lua code
-      'marksman',
-      'texlab',
-      'gopls',
-      'lua_ls',
-      'vimls',
-      'dockerls',
-      'pyright',
-      'ruff',
-      'black',
-      'isort',
-      'jdtls',
-      'java-debug-adapter',
-      'java-test',
-    })
-    require('mason-tool-installer').setup { ensure_installed = ensure_installed }
-
     for server_name, server in pairs(servers) do
       local name = server_name
       server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
@@ -880,20 +1120,11 @@ return {
 
       if vim.lsp.config then
         vim.lsp.config(name, server)
+        vim.lsp.enable(name)
       else
         require('lspconfig')[name].setup(server)
       end
     end
-
-    require('mason-lspconfig').setup {
-      ensure_installed = {}, -- installs are managed by mason-tool-installer above
-      automatic_enable = {
-        exclude = {
-          -- jdtls needs the bespoke Java 21/runtime/workspace config in ftplugin/java.lua.
-          'jdtls',
-        },
-      },
-    }
 
     vim.api.nvim_create_user_command('LspCapabilitiesSnapshot', function()
       local lines = {}
