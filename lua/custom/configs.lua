@@ -7,6 +7,9 @@
 vim.g.mapleader = ' '
 vim.g.maplocalleader = '\\'
 
+-- Identify OS and set clipboard accordingly
+local sysname = vim.uv.os_uname().sysname
+
 -- Sets how neovim will display certain whitespace characters in the editor.
 --  See `:help 'list'`
 --  and `:help 'listchars'`
@@ -95,6 +98,13 @@ vim.g.custom_log_rotate_bytes = vim.g.custom_log_rotate_bytes or (5 * 1024 * 102
 vim.filetype.add {
   extension = {
     mdc = 'markdown',
+    modelfile = 'dockerfile',
+  },
+  filename = {
+    ['Modelfile'] = 'dockerfile',
+  },
+  pattern = {
+    ['[Mm]odelfile.*'] = 'dockerfile',
   },
 }
 
@@ -201,10 +211,7 @@ end
 --  Schedule the setting after `UiEnter` because it can increase startup-time.
 --  Remove this option if you want your OS clipboard to remain independent.
 --  See `:help 'clipboard'`
-vim.schedule(function()
-  -- NOTE: Mac uses unnamedplus, Linux may use unnamed if issues arise
-  vim.opt.clipboard = 'unnamedplus'
-end)
+vim.opt.clipboard = "unnamedplus"
 
 -- Rip grep
 vim.g.rg_derive_root = true
